@@ -101,6 +101,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const financialIntegrityRoutes = (await import("./routes/financial-integrity-routes")).default;
   app.use("/api/financial-integrity", financialIntegrityRoutes);
   
+  // Register Unified Statistics routes (SHERLOCK v18.0) - آمار یکپارچه
+  const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
+  app.use("/api/unified-statistics", unifiedStatisticsRoutes);
+  
   // Direct test route to verify workspace functionality
   app.get("/api/workspace-direct-test", async (req, res) => {
     try {

@@ -184,9 +184,9 @@ export default function Representatives() {
   });
 
   const { data: stats } = useQuery<RepresentativeStats>({
-    queryKey: ["/api/representatives/statistics"],
+    queryKey: ["/api/unified-statistics/representatives"],
     select: (data: any) => {
-      return data || {
+      return data?.data || {
         totalCount: 0,
         activeCount: 0,
         inactiveCount: 0,
@@ -295,7 +295,7 @@ export default function Representatives() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives/statistics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       toast({
         title: "موفقیت",
         description: "نماینده جدید با موفقیت ایجاد شد"
@@ -321,7 +321,7 @@ export default function Representatives() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives/statistics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       toast({
         title: "موفقیت",
         description: "اطلاعات نماینده بروزرسانی شد"
@@ -395,7 +395,7 @@ export default function Representatives() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives/statistics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
     }
   });
 
@@ -408,7 +408,7 @@ export default function Representatives() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives/statistics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       toast({
         title: "حذف موفق",
@@ -440,7 +440,7 @@ export default function Representatives() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives/statistics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       toast({
@@ -2239,9 +2239,9 @@ function CreatePaymentDialog({
     try {
       // 1. Invalidate all related query caches
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives/statistics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives/statistics"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       queryClient.invalidateQueries({ queryKey: [`/api/representatives/${representative.code}`] });
       

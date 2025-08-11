@@ -110,7 +110,8 @@ function ActivityItem({ activity }: { activity: any }) {
 
 export default function Dashboard() {
   const { data: dashboardData, isLoading } = useQuery<DashboardData>({
-    queryKey: ["/api/dashboard"]
+    queryKey: ["/api/unified-statistics/global"],
+    select: (data: any) => data.data // Extract data from unified response structure
   });
 
   if (isLoading) {
