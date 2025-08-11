@@ -1,0 +1,39 @@
+# SHERLOCK v17.8 - Replit Configuration Template
+# This file shows the recommended .replit configuration
+# Copy this content to Configuration pane in Replit
+
+run = "npm run dev"
+entrypoint = "server/index.ts"
+hidden = [".config", "package-lock.json", "tsconfig.tsbuildinfo", "node_modules"]
+
+modules = ["nodejs-20", "postgresql-16"]
+
+[nix]
+channel = "stable-25_05"
+
+[env]
+NODE_ENV = "development"
+PORT = "5000"
+
+[packager]
+language = "nodejs"
+  [packager.features]
+  packageSearch = true
+  guessImports = true
+  enabledForHosting = false
+
+[languages.javascript]
+pattern = "**/{*.js,*.jsx,*.ts,*.tsx}"
+  [languages.javascript.languageServer]
+  start = ["typescript-language-server", "--stdio"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+# Environment Variables (set in Replit Secrets):
+# DATABASE_URL = "postgresql://..."
+# XAI_API_KEY = "xai-..."
+# GROQ_API_KEY = "gsk_..."
+# GEMINI_API_KEY = "..."
+# SESSION_SECRET = "your-secret-here"
