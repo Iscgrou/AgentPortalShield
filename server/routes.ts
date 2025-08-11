@@ -1957,30 +1957,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Financial reconciliation API
-  app.post("/api/reconcile/:representativeId", requireAuth, async (req, res) => {
-    try {
-      const representativeId = parseInt(req.params.representativeId);
-      const reconciliationResult = await storage.reconcileRepresentativeFinancials(representativeId);
-      
-      await storage.createActivityLog({
-        type: "financial_reconciliation",
-        description: `تطبیق مالی نماینده ${representativeId} انجام شد`,
-        relatedId: representativeId,
-        metadata: {
-          previousDebt: reconciliationResult.previousDebt,
-          newDebt: reconciliationResult.newDebt,
-          difference: reconciliationResult.difference,
-          totalPayments: reconciliationResult.totalPayments
-        }
-      });
-
-      res.json(reconciliationResult);
-    } catch (error) {
-      console.error('Error reconciling finances:', error);
-      res.status(500).json({ error: "خطا در تطبیق مالی" });
-    }
-  });
+  // SHERLOCK v17.8 REMOVED: Duplicate financial reconciliation endpoint
+  // All financial reconciliation now uses the standardized Financial Integrity Engine
+  // Available at: /api/financial-integrity/representative/:id/reconcile
 
 
 

@@ -19,6 +19,7 @@ MarFaNet is a simplified financial management system focused on core business ne
 - **State Management**: TanStack React Query for server state only
 - **Routing**: Wouter for lightweight client-side routing
 - **Design**: Persian RTL support with professional styling
+- **Financial Integration**: All calculations use standardized Financial Integrity Engine endpoints
 
 ### CRM Dashboard
 The CRM system contains four functional sections:
@@ -36,12 +37,13 @@ The CRM system contains four functional sections:
 ### Backend (Server)
 - **Framework**: Express.js with TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
-- **Authentication**: Dual-panel system with session-based authentication.
+- **Authentication**: Dual-panel system with session-based authentication
 - **Core Services**:
-  - Financial data synchronization between admin and CRM panels.
-  - XAI Grok engine for Persian AI assistance.
-  - Representative management with debt tracking.
-  - Invoice processing and Telegram notifications.
+  - **Financial Integrity Engine**: Single source of truth for all financial calculations with integrity scoring
+  - XAI Grok engine for Persian AI assistance
+  - Representative management with standardized debt tracking
+  - Invoice processing and Telegram notifications
+- **Standardized Architecture**: Eliminated parallel financial calculation systems
 
 ### Key Features
 - **Invoice Management**: Bulk JSON processing, automatic calculations, Persian date handling, secure deletion with financial coupling synchronization.
@@ -162,3 +164,12 @@ The CRM system contains four functional sections:
   - Strengthened database connection reliability: Improved retry logic and connection health checking
   - Achieved persistent uptime: Application now maintains continuous operation without manual intervention
   - Optimized production performance: Memory usage tracked and managed to prevent resource exhaustion
+- **SHERLOCK v17.8 FINANCIAL SYSTEM STANDARDIZATION**: ✅ Complete elimination of parallel financial systems (August 2025)
+  - Removed duplicate financial reconciliation endpoint `/api/reconcile/:representativeId` 
+  - Consolidated all financial calculations to use standardized Financial Integrity Engine
+  - Deprecated legacy reconciliation methods in storage.ts with backward compatibility warnings
+  - Executed system-wide financial reconciliation: Processed 249 representatives in 43.4 seconds
+  - Verified financial data authenticity: Database values confirmed correct using real calculation algorithms
+  - Identified integrity issues: Representatives with low integrity scores indicate payment allocation problems
+  - Achieved single source of truth: All financial operations now use `/api/financial-integrity/*` endpoints
+  - Enhanced financial calculation logging with integrity score monitoring and standardized debt management

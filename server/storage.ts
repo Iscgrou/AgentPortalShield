@@ -1221,13 +1221,18 @@ export class DatabaseStorage implements IStorage {
     }, 'getDebtorRepresentatives');
   }
 
-  // SHERLOCK v17.8 - UPGRADED: استفاده از Financial Integrity Engine
+  // SHERLOCK v17.8 - STANDARDIZED: Always use Financial Integrity Engine
   async updateRepresentativeFinancials(repId: number): Promise<void> {
     const { financialIntegrityEngine } = await import("./services/financial-integrity-engine");
     return await withDatabaseRetry(
       async () => {
         const result = await financialIntegrityEngine.reconcileRepresentativeFinancials(repId);
-        console.log(`💎 INTEGRITY ENGINE: Updated representative ${repId}:`, result.changes);
+        console.log(`💎 FINANCIAL INTEGRITY ENGINE: Standardized update for representative ${repId}:`, {
+          debt: result.changes.newDebt,
+          credit: result.changes.newCredit,
+          sales: result.changes.newTotalSales,
+          integrityScore: result.snapshot.integrityScore
+        });
         return;
       },
       'updateRepresentativeFinancials'
@@ -2124,7 +2129,9 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  // SHERLOCK v17.8 - UPGRADED: استفاده از Financial Integrity Engine  
+  // SHERLOCK v17.8 - DEPRECATED: Use Financial Integrity Engine directly
+  // This method is now deprecated. Use: financialIntegrityEngine.reconcileRepresentativeFinancials()
+  // Kept for backward compatibility only
   async reconcileRepresentativeFinancials(representativeId: number): Promise<{
     previousDebt: string;
     newDebt: string;
@@ -2132,6 +2139,7 @@ export class DatabaseStorage implements IStorage {
     totalPayments: string;
     difference: string;
   }> {
+    console.warn(`⚠️  DEPRECATED: reconcileRepresentativeFinancials() - Use Financial Integrity Engine directly`);
     const { financialIntegrityEngine } = await import("./services/financial-integrity-engine");
     return await withDatabaseRetry(
       async () => {
