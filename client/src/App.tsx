@@ -24,6 +24,7 @@ import Portal from "@/pages/portal";
 import AdminLogin from "@/pages/admin-login";
 import NotFound from "@/pages/not-found";
 import UnifiedAuth from "@/pages/unified-auth";
+import FinancialIntegrityPage from "@/pages/financial-integrity";
 
 // Lazy load Modern CRM Dashboard with preloading optimization
 const ModernCrmDashboard = lazy(() => 
@@ -192,6 +193,7 @@ function AuthenticatedRouter() {
         <Route path="/invoices" component={Invoices} />
         <Route path="/invoice-management" component={InvoiceManagement} />
         <Route path="/sales-partners" component={SalesPartners} />
+        <Route path="/financial-integrity" component={FinancialIntegrityPage} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>

@@ -1173,7 +1173,7 @@ export class DatabaseStorage implements IStorage {
     }, 'getBatchBasedActiveRepresentatives');
   }
 
-  // SHERLOCK v10.0 NEW METHOD: Get debtor representatives with remaining debt
+  // SHERLOCK v17.8 - UPGRADED: Financial Integrity Engine - Standardized Debt Calculation  
   async getDebtorRepresentatives(): Promise<Array<{
     id: number;
     name: string;
@@ -1183,7 +1183,7 @@ export class DatabaseStorage implements IStorage {
     totalPayments: string;
   }>> {
     return await withDatabaseRetry(async () => {
-      // SHERLOCK v10.0 AUTO-CLEANUP: Remove activity logs older than 30 days
+      // SHERLOCK v17.8 AUTO-CLEANUP: Remove activity logs older than 30 days
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
@@ -1192,87 +1192,39 @@ export class DatabaseStorage implements IStorage {
         .where(sql`activity_logs.created_at < ${thirtyDaysAgo.toISOString()}`);
       
       if (cleanupResult.rowCount && cleanupResult.rowCount > 0) {
-        console.log(`🧹 SHERLOCK v10.0 Auto-cleanup: Removed ${cleanupResult.rowCount} old activity logs`);
+        console.log(`🧹 SHERLOCK v17.8 Auto-cleanup: Removed ${cleanupResult.rowCount} old activity logs`);
       }
 
+      // SHERLOCK v17.8 STANDARDIZED CALCULATION:
+      // remainingDebt = unpaid/overdue invoices - allocated payments (NEVER negative)
       const debtorReps = await db
         .select({
           id: representatives.id,
           name: representatives.name,
           code: representatives.code,
           totalInvoices: sql<string>`COALESCE(SUM(CAST(invoices.amount as DECIMAL)), 0)`,
-          totalPayments: sql<string>`COALESCE(SUM(CAST(payments.amount as DECIMAL)), 0)`,
-          remainingDebt: sql<string>`COALESCE(SUM(CAST(invoices.amount as DECIMAL)), 0) - COALESCE(SUM(CAST(payments.amount as DECIMAL)), 0)`
+          totalPayments: sql<string>`COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0)`,
+          remainingDebt: sql<string>`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0))`
         })
         .from(representatives)
         .leftJoin(invoices, eq(representatives.id, invoices.representativeId))
         .leftJoin(payments, eq(representatives.id, payments.representativeId))
         .groupBy(representatives.id, representatives.name, representatives.code)
-        .having(sql`COALESCE(SUM(CAST(invoices.amount as DECIMAL)), 0) - COALESCE(SUM(CAST(payments.amount as DECIMAL)), 0) > 0`)
-        .orderBy(sql`COALESCE(SUM(CAST(invoices.amount as DECIMAL)), 0) - COALESCE(SUM(CAST(payments.amount as DECIMAL)), 0) DESC`);
+        .having(sql`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0)) > 0`)
+        .orderBy(sql`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0)) DESC`);
 
       return debtorReps;
     }, 'getDebtorRepresentatives');
   }
 
+  // SHERLOCK v17.8 - UPGRADED: استفاده از Financial Integrity Engine
   async updateRepresentativeFinancials(repId: number): Promise<void> {
+    const { financialIntegrityEngine } = await import("./services/financial-integrity-engine");
     return await withDatabaseRetry(
       async () => {
-        // Calculate total from unpaid + overdue invoices
-        const [unpaidResult] = await db
-          .select({ 
-            unpaidTotal: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
-          })
-          .from(invoices)
-          .where(
-            and(
-              eq(invoices.representativeId, repId),
-              or(eq(invoices.status, "unpaid"), eq(invoices.status, "overdue"))
-            )
-          );
-
-        // Calculate total payments for this representative
-        const [paymentsResult] = await db
-          .select({ 
-            totalPayments: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
-          })
-          .from(payments)
-          .where(eq(payments.representativeId, repId));
-
-        // Calculate actual debt (unpaid invoices minus payments)
-        const unpaidAmount = parseFloat(unpaidResult.unpaidTotal || "0");
-        const totalPayments = parseFloat(paymentsResult.totalPayments || "0");
-        const actualDebt = Math.max(0, unpaidAmount - totalPayments);
-
-        // Calculate total sales (all invoices) - INCLUDING DELETED ONES EFFECT
-        const [salesResult] = await db
-          .select({ 
-            totalSales: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
-          })
-          .from(invoices)
-          .where(eq(invoices.representativeId, repId));
-
-        // Calculate credit (if payments exceed unpaid invoices)
-        const credit = totalPayments > unpaidAmount ? totalPayments - unpaidAmount : 0;
-
-        // Update representative with accurate calculations
-        await db
-          .update(representatives)
-          .set({
-            totalDebt: actualDebt.toString(),
-            totalSales: salesResult.totalSales || "0",
-            credit: credit.toString(),
-            updatedAt: new Date()
-          })
-          .where(eq(representatives.id, repId));
-
-        console.log(`💰 Financial update for representative ${repId}:`, {
-          unpaidAmount,
-          totalPayments,
-          actualDebt,
-          totalSales: salesResult.totalSales,
-          credit
-        });
+        const result = await financialIntegrityEngine.reconcileRepresentativeFinancials(repId);
+        console.log(`💎 INTEGRITY ENGINE: Updated representative ${repId}:`, result.changes);
+        return;
       },
       'updateRepresentativeFinancials'
     );
@@ -2168,6 +2120,7 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
+  // SHERLOCK v17.8 - UPGRADED: استفاده از Financial Integrity Engine  
   async reconcileRepresentativeFinancials(representativeId: number): Promise<{
     previousDebt: string;
     newDebt: string;
@@ -2175,56 +2128,19 @@ export class DatabaseStorage implements IStorage {
     totalPayments: string;
     difference: string;
   }> {
+    const { financialIntegrityEngine } = await import("./services/financial-integrity-engine");
     return await withDatabaseRetry(
       async () => {
-        // Get current representative data
-        const representative = await this.getRepresentative(representativeId);
-        if (!representative) throw new Error('Representative not found');
-
-        const previousDebt = representative.totalDebt || '0';
-
-        // Calculate total sales from all invoices
-        const totalSalesResult = await db
-          .select({ total: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` })
-          .from(invoices)
-          .where(eq(invoices.representativeId, representativeId));
+        const result = await financialIntegrityEngine.reconcileRepresentativeFinancials(representativeId);
         
-        const totalSales = totalSalesResult[0]?.total || '0';
-
-        // Calculate total allocated payments
-        const totalPaymentsResult = await db
-          .select({ total: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` })
-          .from(payments)
-          .where(
-            and(
-              eq(payments.representativeId, representativeId),
-              eq(payments.isAllocated, true)
-            )
-          );
-        
-        const totalPayments = totalPaymentsResult[0]?.total || '0';
-
-        // Calculate new debt (total sales - total allocated payments)
-        const newDebt = (parseFloat(totalSales) - parseFloat(totalPayments)).toString();
-
-        // Update representative
-        await db
-          .update(representatives)
-          .set({
-            totalDebt: newDebt,
-            totalSales: totalSales,
-            updatedAt: new Date()
-          })
-          .where(eq(representatives.id, representativeId));
-
-        const difference = (parseFloat(newDebt) - parseFloat(previousDebt || '0')).toString();
-
         return {
-          previousDebt,
-          newDebt,
-          totalSales,
-          totalPayments,
-          difference
+          previousDebt: result.changes.previousDebt,
+          newDebt: result.changes.newDebt,
+          totalSales: result.changes.newTotalSales,
+          totalPayments: result.snapshot.allocatedPaymentAmount.toString(),
+          difference: (
+            parseFloat(result.changes.newDebt) - parseFloat(result.changes.previousDebt)
+          ).toString()
         };
       },
       'reconcileRepresentativeFinancials'

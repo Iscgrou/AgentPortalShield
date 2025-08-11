@@ -97,6 +97,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const couplingRoutes = (await import("./routes/coupling-routes")).default;
   app.use("/api/coupling", couplingRoutes);
   
+  // Register Financial Integrity routes (SHERLOCK v17.8) - یکپارچگی مالی
+  const financialIntegrityRoutes = (await import("./routes/financial-integrity-routes")).default;
+  app.use("/api/financial-integrity", financialIntegrityRoutes);
+  
   // Direct test route to verify workspace functionality
   app.get("/api/workspace-direct-test", async (req, res) => {
     try {

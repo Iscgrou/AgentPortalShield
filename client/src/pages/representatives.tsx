@@ -53,6 +53,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
+import { FinancialIntegrityDashboard } from "../components/financial-integrity-dashboard";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";

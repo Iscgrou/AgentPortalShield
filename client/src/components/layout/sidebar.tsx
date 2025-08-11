@@ -10,7 +10,8 @@ import {
   LogOut,
   Menu,
   X,
-  Edit
+  Edit,
+  ShieldCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ const navigation = [
   { name: "فاکتورها", href: "/invoices", icon: FileText },
   { name: "مدیریت فاکتورها", href: "/invoice-management", icon: Edit },
   { name: "همکاران فروش", href: "/sales-partners", icon: Handshake },
+  { name: "یکپارچگی مالی", href: "/financial-integrity", icon: ShieldCheck },
   { name: "تنظیمات", href: "/settings", icon: Settings },
 ];
 
