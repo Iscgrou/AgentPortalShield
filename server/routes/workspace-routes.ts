@@ -378,7 +378,7 @@ router.put('/reminders/:id/complete', async (req, res) => {
     const { id } = req.params;
     console.log(`✅ Completing reminder: ${id}`);
     
-  const completed = await workspaceStorage.completeAiReminder(id);
+    const completed = await workspaceStorage.completeReminder(id);
     
     res.json({
       success: true,

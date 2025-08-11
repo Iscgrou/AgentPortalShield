@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, json, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, json } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -96,26 +96,14 @@ export const payments = pgTable("payments", {
   createdAt: timestamp("created_at").defaultNow()
 });
 
-// Activity Log (لاگ فعالیت‌ها) - Enhanced for comprehensive auditing
+// Activity Log (لاگ فعالیت‌ها)
 export const activityLogs = pgTable("activity_logs", {
   id: serial("id").primaryKey(),
-  type: text("type").notNull(), // invoice_created, payment_received, crm_manager_unlock, etc.
+  type: text("type").notNull(), // invoice_created, payment_received, telegram_sent, etc.
   description: text("description").notNull(),
-  relatedId: integer("related_id"), // ID of related entity (nullable)
-  userId: text("user_id"), // Who performed the action
-  sessionId: text("session_id"), // Session identifier
-  ipAddress: text("ip_address"), // Client IP (redacted for privacy)
-  userAgent: text("user_agent"), // Client user agent (truncated)
-  severity: text("severity").notNull().default("info"), // info, warning, error, critical
-  metadata: json("metadata"), // Additional structured data
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => {
-  return {
-    typeIdx: index("activity_logs_type_idx").on(table.type),
-    dateIdx: index("activity_logs_date_idx").on(table.createdAt),
-    userIdx: index("activity_logs_user_idx").on(table.userId),
-    severityIdx: index("activity_logs_severity_idx").on(table.severity),
-  };
+  relatedId: integer("related_id"), // ID of related entity
+  metadata: json("metadata"), // Additional data
+  createdAt: timestamp("created_at").defaultNow()
 });
 
 // SHERLOCK v2.0 - Removed duplicate table definition

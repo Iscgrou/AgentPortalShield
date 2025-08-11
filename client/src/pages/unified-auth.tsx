@@ -81,8 +81,8 @@ export default function UnifiedAuth() {
 
   const onSubmit = async (data: LoginForm) => {
     try {
-      // Respect the explicitly selected panel; default to admin if undecided
-      const targetLoginType = loginType === 'detecting' ? 'admin' : loginType;
+      // Determine login type based on username
+      const targetLoginType = data.username === 'mgr' ? 'admin' : 'crm';
       const targetRedirect = targetLoginType === 'admin' ? '/dashboard' : '/crm';
       
       if (targetLoginType === 'admin') {
@@ -106,7 +106,7 @@ export default function UnifiedAuth() {
             });
           }
         });
-  } else {
+      } else {
         // CRM login
         crmAuth.loginMutation.mutate(data, {
           onSuccess: (response: any) => {

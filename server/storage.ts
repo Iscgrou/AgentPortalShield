@@ -211,18 +211,6 @@ export interface IStorage {
   getFinancialTransaction(transactionId: string): Promise<FinancialTransaction | undefined>;
   getTransactionsByRepresentative(repId: number): Promise<FinancialTransaction[]>;
   getPendingTransactions(): Promise<FinancialTransaction[]>;
-  getFinancialTransactionsPaginated(options: {
-    page: number;
-    limit: number;
-    representativeId?: number;
-    status?: string;
-    type?: string;
-    entityType?: string;
-    entityId?: number;
-    dateFrom?: string; // ISO string
-    dateTo?: string;   // ISO string
-    sort?: 'newest' | 'oldest';
-  }): Promise<{ data: FinancialTransaction[]; pagination: { currentPage: number; pageSize: number; totalCount: number; totalPages: number; hasNextPage: boolean; hasPrevPage: boolean } }>;
   rollbackTransaction(transactionId: string): Promise<void>;
 
   // Data Integrity Constraints (Clock Precision)
@@ -1860,25 +1848,8 @@ export class DatabaseStorage implements IStorage {
   async reconcileFinancialData(): Promise<{success: boolean, message: string}> {
     return await withDatabaseRetry(
       async () => {
-        // Simple reconciliation - check for any pending transactions and record a system transaction
+        // Simple reconciliation - check for any pending transactions
         const pendingTransactions = await this.getPendingTransactions();
-
-        const txId = `RECONCILE-ALL-${nanoid()}`;
-        await this.createFinancialTransaction({
-          transactionId: txId,
-          type: 'DEBT_RECONCILE_ALL',
-          representativeId: 0, // system-wide
-          relatedEntityType: 'system',
-          relatedEntityId: 0,
-          originalState: { pendingCount: pendingTransactions.length },
-          targetState: { action: 'reconcile_all' },
-          financialImpact: { debtChange: 0 },
-          processingSteps: ['reconcileFinancialData'],
-          initiatedBy: 'system'
-        });
-
-        await this.updateTransactionStatus(txId, 'COMPLETED', { reconciledAt: new Date().toISOString() });
-
         return {
           success: true,
           message: `هماهنگی کامل شد. ${pendingTransactions.length} تراکنش در انتظار پردازش`
@@ -1893,79 +1864,6 @@ export class DatabaseStorage implements IStorage {
     return await withDatabaseRetry(
       () => db.select().from(financialTransactions).orderBy(desc(financialTransactions.createdAt)),
       'getFinancialTransactions'
-    );
-  }
-
-  async getFinancialTransactionsPaginated(options: {
-    page: number;
-    limit: number;
-    representativeId?: number;
-    status?: string;
-    type?: string;
-    entityType?: string;
-    entityId?: number;
-    dateFrom?: string;
-    dateTo?: string;
-    sort?: 'newest' | 'oldest';
-  }): Promise<{ data: FinancialTransaction[]; pagination: { currentPage: number; pageSize: number; totalCount: number; totalPages: number; hasNextPage: boolean; hasPrevPage: boolean } }> {
-    return await withDatabaseRetry(
-      async () => {
-        const conditions: any[] = [];
-        if (options.representativeId) {
-          conditions.push(eq(financialTransactions.representativeId, options.representativeId));
-        }
-        if (options.status) {
-          conditions.push(eq(financialTransactions.status, options.status));
-        }
-        if (options.type) {
-          conditions.push(eq(financialTransactions.type, options.type as any));
-        }
-        if (options.entityType) {
-          conditions.push(eq(financialTransactions.relatedEntityType, options.entityType as any));
-        }
-        if (options.entityId) {
-          conditions.push(eq(financialTransactions.relatedEntityId as any, options.entityId));
-        }
-        if (options.dateFrom) {
-          conditions.push(sql`${financialTransactions.createdAt} >= ${options.dateFrom}`);
-        }
-        if (options.dateTo) {
-          conditions.push(sql`${financialTransactions.createdAt} <= ${options.dateTo}`);
-        }
-
-        const whereClause = conditions.length > 0 ? and(...conditions) : undefined as any;
-
-        // total count
-        const countRows = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(financialTransactions)
-          .where(whereClause ?? sql`true`);
-        const totalCount = countRows[0]?.count || 0;
-
-        // data
-        const order = options.sort === 'oldest' ? (financialTransactions.createdAt as any) : desc(financialTransactions.createdAt);
-        const data = await db
-          .select()
-          .from(financialTransactions)
-          .where(whereClause ?? sql`true`)
-          .orderBy(order)
-          .limit(options.limit)
-          .offset((options.page - 1) * options.limit);
-
-        const totalPages = Math.max(1, Math.ceil(totalCount / options.limit));
-        return {
-          data,
-          pagination: {
-            currentPage: options.page,
-            pageSize: options.limit,
-            totalCount,
-            totalPages,
-            hasNextPage: options.page < totalPages,
-            hasPrevPage: options.page > 1
-          }
-        };
-      },
-      'getFinancialTransactionsPaginated'
     );
   }
 
@@ -2131,147 +2029,16 @@ export class DatabaseStorage implements IStorage {
   async allocatePaymentToInvoice(paymentId: number, invoiceId: number): Promise<Payment> {
     return await withDatabaseRetry(
       async () => {
-        // Load current payment and invoice to determine remaining
-        const [payment] = await db.select().from(payments).where(eq(payments.id, paymentId));
-        if (!payment) throw new Error(`Payment ${paymentId} not found`);
-
-        const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
-        if (!invoice) throw new Error(`Invoice ${invoiceId} not found`);
-
-        // Idempotency guard: if this payment is already allocated to this invoice, skip
-        if (payment.isAllocated && payment.invoiceId === invoiceId) {
-          await this.createActivityLog({
-            type: "payment_allocation_skipped",
-            description: `تخصیص تکراری پرداخت ${paymentId} به فاکتور ${invoiceId} نادیده گرفته شد (idem-potent)` ,
-            relatedId: paymentId,
-            metadata: { reason: 'already_allocated', invoiceId }
-          });
-          return payment;
-        }
-
-        // Calculate already-paid amount on this invoice
-        const existingAllocated = await db
-          .select()
-          .from(payments)
-          .where(and(eq(payments.invoiceId, invoiceId), eq(payments.isAllocated, true)));
-
-        const paidAmount = existingAllocated.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-        const invoiceTotal = parseFloat(invoice.amount);
-        const remaining = Math.max(invoiceTotal - paidAmount, 0);
-
-        const payAmount = parseFloat(payment.amount);
-
-        if (remaining <= 0) {
-          // Invoice already fully paid — leave payment unallocated
-          await this.createActivityLog({
-            type: "payment_allocation_skipped",
-            description: `تخصیص پرداخت ${paymentId} به فاکتور ${invoiceId} رد شد (فاکتور تسویه است)` ,
-            relatedId: paymentId,
-          });
-          return payment; // no change
-        }
-
-        if (payAmount <= remaining) {
-          // Simple full allocation of this payment to invoice
-          const [updatedPayment] = await db
-            .update(payments)
-            .set({ invoiceId, isAllocated: true })
-            .where(eq(payments.id, paymentId))
-            .returning();
-
-          // If now fully paid, update invoice status
-          if (payAmount === remaining) {
-            await db.update(invoices).set({ status: 'paid' }).where(eq(invoices.id, invoiceId));
-          }
-
-          // Activity + financial transaction
-          await this.createActivityLog({
-            type: "payment_allocated",
-            description: `پرداخت ${updatedPayment.amount} به فاکتور ${invoice.invoiceNumber} تخصیص یافت`,
-            relatedId: updatedPayment.id,
-            metadata: { paymentId, invoiceId, amount: updatedPayment.amount }
-          });
-
-          const txId = `PAY-ALLOC-${nanoid()}`;
-          await this.createFinancialTransaction({
-            transactionId: txId,
-            type: 'PAYMENT_ALLOCATE',
-            representativeId: payment.representativeId,
-            relatedEntityType: 'payment',
-            relatedEntityId: payment.id,
-            originalState: { invoiceId, remainingBefore: remaining },
-            targetState: { allocatedAmount: payment.amount },
-            actualState: { allocatedAmount: payment.amount },
-            financialImpact: { debtChange: -payAmount },
-            processingSteps: [ 'allocatePaymentToInvoice' ],
-            initiatedBy: 'system'
-          });
-
-          // Mark transaction as completed
-          await this.updateTransactionStatus(txId, 'COMPLETED', { allocatedAmount: payment.amount });
-
-          // Update representative aggregates
-          await this.updateRepresentativeFinancials(payment.representativeId);
-
-          return updatedPayment;
-        } else {
-          // Overpay: split payment into allocated part (remaining) and remainder as a new unallocated payment
-          const remainder = payAmount - remaining;
-
-          // 1) Update current payment as allocated with reduced amount = remaining
-          const [allocatedPayment] = await db
-            .update(payments)
-            .set({ invoiceId, isAllocated: true, amount: remaining.toString() })
-            .where(eq(payments.id, paymentId))
-            .returning();
-
-          // 2) Create a new payment row for the remainder (unallocated)
-          const [remainderPayment] = await db
-            .insert(payments)
-            .values({
-              representativeId: payment.representativeId,
-              amount: remainder.toString(),
-              paymentDate: payment.paymentDate,
-              description: `${payment.description || ''} (split remainder)`?.trim(),
-              isAllocated: false
-            })
-            .returning();
-
-          // 3) Mark invoice fully paid
-          await db.update(invoices).set({ status: 'paid' }).where(eq(invoices.id, invoiceId));
-
-          // 4) Log activity and financial transaction with both effects
-          await this.createActivityLog({
-            type: "payment_split_overpay",
-            description: `پرداخت ${payAmount} شکسته شد: ${remaining} به فاکتور ${invoice.invoiceNumber} + ${remainder} مانده تخصیص‌نیافته` ,
-            relatedId: allocatedPayment.id,
-            metadata: { paymentId, invoiceId, allocated: remaining, remainder }
-          });
-
-          const txId = `PAY-SPLIT-${nanoid()}`;
-          await this.createFinancialTransaction({
-            transactionId: txId,
-            type: 'PAYMENT_ALLOCATE',
-            representativeId: payment.representativeId,
-            relatedEntityType: 'payment',
-            relatedEntityId: payment.id,
-            originalState: { invoiceId, remainingBefore: remaining },
-            // Write both keys for forward/backward compatibility
-            targetState: { allocatedAmount: remaining, createdRemainder: remainder, createdRemainderId: remainder },
-            actualState: { allocatedAmount: remaining, createdRemainder: remainderPayment.id, createdRemainderId: remainderPayment.id },
-            financialImpact: { debtChange: -remaining, creditChange: 0 },
-            processingSteps: [ 'allocatePaymentToInvoice', 'splitOverpay' ],
-            initiatedBy: 'system'
-          });
-
-          // Mark transaction as completed
-          await this.updateTransactionStatus(txId, 'COMPLETED', { allocatedAmount: remaining, createdRemainder: remainderPayment.id, createdRemainderId: remainderPayment.id });
-
-          // 5) Update representative aggregates
-          await this.updateRepresentativeFinancials(payment.representativeId);
-
-          return allocatedPayment;
-        }
+        const [updatedPayment] = await db
+          .update(payments)
+          .set({ 
+            invoiceId: invoiceId,
+            isAllocated: true 
+          })
+          .where(eq(payments.id, paymentId))
+          .returning();
+        
+        return updatedPayment;
       },
       'allocatePaymentToInvoice'
     );
@@ -2332,24 +2099,27 @@ export class DatabaseStorage implements IStorage {
               sum + parseFloat(p.amount), 0);
             const remainingAmount = parseFloat(invoice.amount) - paidAmount;
 
-            if (remainingAmount > 0) {
-              const pAmount = parseFloat(payment.amount);
-              if (pAmount <= remainingAmount) {
-                // Allocate entire payment to this invoice
-                await this.allocatePaymentToInvoice(payment.id, invoice.id);
-                allocated++;
-                totalAmount += pAmount;
-                details.push({ paymentId: payment.id, invoiceId: invoice.id, amount: payment.amount });
-                break; // Move to next payment
-              } else {
-                // Overpay: split and allocate only needed part
-                await this.allocatePaymentToInvoice(payment.id, invoice.id);
-                // allocatePaymentToInvoice will split and create a remainder payment (unallocated)
-                allocated++;
-                totalAmount += remainingAmount;
-                details.push({ paymentId: payment.id, invoiceId: invoice.id, amount: remainingAmount.toString() });
-                break; // Move to next payment
+            if (remainingAmount > 0 && parseFloat(payment.amount) <= remainingAmount) {
+              // Allocate this payment to this invoice
+              await this.allocatePaymentToInvoice(payment.id, invoice.id);
+              
+              allocated++;
+              totalAmount += parseFloat(payment.amount);
+              details.push({
+                paymentId: payment.id,
+                invoiceId: invoice.id,
+                amount: payment.amount
+              });
+
+              // Update invoice status if fully paid
+              if (parseFloat(payment.amount) >= remainingAmount) {
+                await db
+                  .update(invoices)
+                  .set({ status: 'paid' })
+                  .where(eq(invoices.id, invoice.id));
               }
+              
+              break; // Move to next payment
             }
           }
         }
@@ -2398,119 +2168,6 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  async getPaymentAllocationDetails(paymentId: number): Promise<{
-    payment: Payment | undefined;
-    allocatedAmount: string | null;
-    invoiceId: number | null;
-    remainderPayment: Payment | null;
-    transactionId: string | null;
-  }> {
-    return await withDatabaseRetry(
-      async () => {
-        // Load payment
-        const [payment] = await db.select().from(payments).where(eq(payments.id, paymentId));
-        if (!payment) {
-          return { payment: undefined, allocatedAmount: null, invoiceId: null, remainderPayment: null, transactionId: null };
-        }
-
-        // Find latest allocation transaction for this payment
-        const txRows = await db
-          .select()
-          .from(financialTransactions)
-          .where(
-            and(
-              eq(financialTransactions.relatedEntityType, 'payment'),
-              eq(financialTransactions.relatedEntityId as any, paymentId)
-            )
-          )
-          .orderBy(desc(financialTransactions.createdAt));
-
-        let allocatedAmount: string | null = null;
-        let remainderPayment: Payment | null = null;
-        let txId: string | null = null;
-
-        if (txRows.length > 0) {
-          const tx = txRows[0] as any;
-          txId = tx.transactionId;
-          const actual = tx.actualState || tx.targetState || {};
-          if (actual.allocatedAmount !== undefined) {
-            allocatedAmount = String(actual.allocatedAmount);
-          }
-          const remainderKey = actual.createdRemainderId ?? actual.createdRemainder;
-          if (remainderKey) {
-            const [rem] = await db.select().from(payments).where(eq(payments.id, remainderKey));
-            if (rem) remainderPayment = rem;
-          }
-        }
-
-        return {
-          payment,
-          allocatedAmount,
-          invoiceId: payment.invoiceId ?? null,
-          remainderPayment,
-          transactionId: txId
-        };
-      },
-      'getPaymentAllocationDetails'
-    );
-  }
-
-  async getRepresentativeFinancialSummary(repId: number): Promise<{
-    representative: Representative | undefined;
-    unpaidAmount: string;
-    totalPayments: string;
-    credit: string;
-    totalSales: string;
-    totalDebt: string;
-    payments: { total: number; allocated: number; unallocated: number };
-  }> {
-    return await withDatabaseRetry(
-      async () => {
-        // Ensure aggregates are current
-        await this.updateRepresentativeFinancials(repId);
-
-        const [rep] = await db.select().from(representatives).where(eq(representatives.id, repId));
-
-        // unpaid invoices total
-        const [unpaidResult] = await db
-          .select({ unpaidTotal: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` })
-          .from(invoices)
-          .where(and(eq(invoices.representativeId, repId), or(eq(invoices.status, 'unpaid'), eq(invoices.status, 'overdue'))));
-
-        // payments stats
-        const [totalPaymentsRow] = await db
-          .select({ total: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` })
-          .from(payments)
-          .where(eq(payments.representativeId, repId));
-
-        const [allocatedCountRow] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(payments)
-          .where(and(eq(payments.representativeId, repId), eq(payments.isAllocated, true)));
-
-        const [totalCountRow] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(payments)
-          .where(eq(payments.representativeId, repId));
-
-        return {
-          representative: rep,
-          unpaidAmount: unpaidResult?.unpaidTotal || '0',
-          totalPayments: totalPaymentsRow?.total || '0',
-          credit: rep?.credit?.toString?.() || String(rep?.credit ?? '0'),
-          totalSales: rep?.totalSales?.toString?.() || String(rep?.totalSales ?? '0'),
-          totalDebt: rep?.totalDebt?.toString?.() || String(rep?.totalDebt ?? '0'),
-          payments: {
-            total: totalCountRow?.count || 0,
-            allocated: allocatedCountRow?.count || 0,
-            unallocated: (totalCountRow?.count || 0) - (allocatedCountRow?.count || 0)
-          }
-        };
-      },
-      'getRepresentativeFinancialSummary'
-    );
-  }
-
   async reconcileRepresentativeFinancials(representativeId: number): Promise<{
     previousDebt: string;
     newDebt: string;
@@ -2525,21 +2182,6 @@ export class DatabaseStorage implements IStorage {
         if (!representative) throw new Error('Representative not found');
 
         const previousDebt = representative.totalDebt || '0';
-
-        // Create a financial transaction to audit this reconciliation
-        const txId = `RECON-${representativeId}-${nanoid()}`;
-        await this.createFinancialTransaction({
-          transactionId: txId,
-          type: 'DEBT_RECONCILE',
-          representativeId,
-          relatedEntityType: 'representative',
-          relatedEntityId: representativeId,
-          originalState: { previousDebt },
-          targetState: { action: 'recalculate_debt' },
-          financialImpact: { debtChange: 0 },
-          processingSteps: ['reconcileRepresentativeFinancials'],
-          initiatedBy: 'system'
-        });
 
         // Calculate total sales from all invoices
         const totalSalesResult = await db
@@ -2576,14 +2218,6 @@ export class DatabaseStorage implements IStorage {
           .where(eq(representatives.id, representativeId));
 
         const difference = (parseFloat(newDebt) - parseFloat(previousDebt || '0')).toString();
-
-        // Complete transaction with actual state after reconciliation
-        await this.updateTransactionStatus(txId, 'COMPLETED', {
-          newDebt,
-          totalPayments,
-          totalSales,
-          difference
-        });
 
         return {
           previousDebt,
@@ -2848,11 +2482,33 @@ export class DatabaseStorage implements IStorage {
         console.log(`🔄 SHERLOCK v1.0: Auto-allocating payment ${paymentId} to representative ${representativeId}`);
         console.log(`📋 Found ${unpaidInvoices.length} unpaid invoices, oldest: ${unpaidInvoices[0].invoiceNumber} (${unpaidInvoices[0].issueDate})`);
         
-        // Find the oldest unpaid invoice and allocate payment via audited method (handles overpay/splitting)
+        // Find the oldest unpaid invoice and allocate payment to it
         const oldestInvoice = unpaidInvoices[0];
-        await this.allocatePaymentToInvoice(payment.id, oldestInvoice.id);
+        
+        // Update payment to be allocated to this invoice
+        await db
+          .update(payments)
+          .set({
+            invoiceId: oldestInvoice.id,
+            isAllocated: true
+          })
+          .where(eq(payments.id, paymentId));
 
-        // Optional high-level activity log for auto-allocation orchestration
+        // Check if payment amount covers the invoice amount
+        const paymentAmount = parseFloat(payment.amount);
+        const invoiceAmount = parseFloat(oldestInvoice.amount);
+
+        if (paymentAmount >= invoiceAmount) {
+          // Mark invoice as paid
+          await db
+            .update(invoices)
+            .set({ status: "paid" })
+            .where(eq(invoices.id, oldestInvoice.id));
+        }
+
+        // Update representative financials
+        await this.updateRepresentativeFinancials(representativeId);
+
         await this.createActivityLog({
           type: "payment_auto_allocated",
           description: `پرداخت خودکار تخصیص یافت: ${payment.amount} به فاکتور ${oldestInvoice.invoiceNumber}`,
@@ -2973,13 +2629,13 @@ export class DatabaseStorage implements IStorage {
         let conditions = [sql`${invoices.usageData}->>'type' = 'manual'`];
         
         if (options.search) {
-          const search = `%${options.search}%`;
-          const orClause: any = or(
-            ilike(invoices.invoiceNumber, search),
-            ilike(representatives.name, search),
-            ilike(representatives.code, search)
+          conditions.push(
+            or(
+              ilike(invoices.invoiceNumber, `%${options.search}%`),
+              ilike(representatives.name, `%${options.search}%`),
+              ilike(representatives.code, `%${options.search}%`)
+            )
           );
-          conditions.push(orClause);
         }
 
         if (options.status && options.status !== 'all') {

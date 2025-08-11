@@ -1,0 +1,70 @@
+# Core depth-toggles
+  ENABLE_RECORD_REPLAY: true
+  ENABLE_FORMAL_PROOF: true
+  ENABLE_PROPERTY_FUZZ: true
+  # Council roles (true / false / auto)
+  COUNCIL_ROLES:
+    BUILDER: true
+    REVIEWER: true
+    THREAT_SENTINEL: auto
+    COMPLIANCE_OFFICER: auto
+    PERF_WATCHER: true
+    COST_AUDITOR: true
+    ML_STEWARD: auto
+# 30 enhancement toggles
+  ENABLE_AUTO_DEP_UPGRADE: true
+  ENABLE_DATA_LINEAGE_TRACKER: true
+  ENABLE_SCHEMA_MIGRATION_GEN: true
+  ENABLE_DIGITAL_TWIN_SANDBOX: true
+  ENABLE_REAL_USER_TELEMETRY_LOOP: true
+  ENABLE_API_DOCS_AUTOGEN: true
+  ENABLE_AB_EXPERIMENT: true
+  ENABLE_BETA_COHORT: true
+  ENABLE_CHAOS_INJECTION: true
+  ENABLE_SELF_HEAL_WATCHDOG: true
+  ENABLE_MULTI_CLOUD_OPTIMIZER: true
+  ENABLE_AUTO_OTEL: true
+  ENABLE_ETHICAL_BIAS_SCAN: true
+  ENABLE_DIFF_PRIVACY: true
+  ENABLE_XAI_REPORT: true
+  ENABLE_REG_CHANGE_WATCHER: true
+  ENABLE_AUTO_OWNER: true
+  ENABLE_VISUALIZER: true
+  ENABLE_CHATOPS: true
+  ENABLE_BLUE_GREEN_SWITCHBACK: true
+  ENABLE_COST_FORECAST: true
+  ENABLE_BUG_BOUNTY_TRIGGER: true
+  ENABLE_LOCALIZATION: true
+  ENABLE_PROFILING_FLAMEGRAPH: true
+  ENABLE_HW_RESOURCE_ADVISOR: true
+  ENABLE_KG_RETRIEVAL: true
+  ENABLE_THREAT_HUNTING: true
+  ENABLE_FLAG_DEBT_DASHBOARD: true
+  ENABLE_USER_VALUE_TRACKER: true
+#  INTELLIGENCE LADDER  (new layers ★)
+#    L0  Feature-RFC Parser → typed schema + costs + carbon + user-value metric
+#    L1  Temporal/Data-Class Flow-Map  ★
+#    L2  Change-Impact (CIA) + Perf/Cost/Carbon Sentinels
+#    L3  Auto-Dependency Upgrader & CVE Stream  ★
+#    L4  Data-Lineage & Column-Impact Scoring  ★
+#    L5  Schema Migration Generator + Rollback  ★
+#    L6  Solution Synthesiser  (designs / diffs scored Utility U)
+#    L7  Dual-LLM Council Vote  (≥⅔ confidence)
+#    L8  Formal Proof & Property Fuzz  (if enabled)
+#    L9  Digital-Twin Sandbox Simulation  ★
+#    L10 Record/Replay Sentinel
+#    L11 Progressive Delivery with Chaos Injection  ★
+#    L12 Real-User Telemetry Feedback Loop  ★
+#    L13 Self-Healing Watchdog + Flag TTL cleanup  ★
+#    L14 Multi-Cloud Optimiser & Cost-Forecast    ★
+#    L15 Ethics/Bias, Differential-Privacy, XAI   ★
+#    L16 Regulatory-Change Watcher & Threat-Hunt  ★
+#
+#  ESSENTIAL TOOLCHAIN (superset)
+#    viewRuntimeLogs • searchTheWeb • requestClarification • generateFlowMap
+#    depUpgrade • lineageTracker • schemaGen • digitalTwin • recordReplayCapture
+#    threatScan • complianceCheck • chaosInject • perfProfile • costForecast
+#    otelAutoInject • biasScan • diffPrivacyLayer • xaiReport • regWatcher
+#    ownerMap • visualizerLink • chatOpsNotify • bugBountyTrigger • l10nExtract
+#    hwAdvisor • kgRetrieveSimilar
+#    api.test.ts (jest) • feature-toggle CLI • rollout-orch (--canary / --blue-green)

@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { CrmAuthProvider, useCrmAuth } from "./hooks/use-crm-auth";
-import { mobileUXService } from "./services/mobile-ux-service";
 
 // Layout components
 import Sidebar from "@/components/layout/sidebar";
@@ -93,25 +92,6 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-
-  // Initialize mobile UX optimizations
-  useEffect(() => {
-    mobileUXService.initializePage();
-    mobileUXService.optimizePerformance();
-    
-    // Setup mobile navigation gestures
-    mobileUXService.onGesture('swipe', 'right', () => {
-      if (mobileUXService.isMobileDevice() && !isSidebarOpen) {
-        setIsSidebarOpen(true);
-      }
-    });
-
-    mobileUXService.onGesture('swipe', 'left', () => {
-      if (mobileUXService.isMobileDevice() && isSidebarOpen) {
-        setIsSidebarOpen(false);
-      }
-    });
-  }, [isSidebarOpen]);
 
   return (
     <div className="admin-panel-background dark">

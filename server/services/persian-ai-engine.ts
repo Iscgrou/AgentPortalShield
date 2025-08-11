@@ -126,8 +126,8 @@ export class PersianAIEngine {
   private async generateCulturalAnalysis(representative: any): Promise<CulturalProfile> {
     try {
       // Use XAI Grok for cultural analysis
-  const culturalPrompt = this.buildCulturalAnalysisPrompt(representative);
-  const aiResponse = await this.xaiEngine.generateCulturalInsights(representative, culturalPrompt);
+      const culturalPrompt = this.buildCulturalAnalysisPrompt(representative);
+      const aiResponse = await this.xaiEngine.generateCulturalInsights(representative.id, culturalPrompt);
 
       return this.parseCulturalResponse(aiResponse, representative);
     } catch (error) {

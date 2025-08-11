@@ -23,7 +23,6 @@ import {
 } from 'lucide-react';
 import RemindersPanel from './RemindersPanel';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { crmFetch } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 interface WorkspaceTask {
@@ -73,7 +72,7 @@ export function WorkspaceHub() {
   // Mark task as completed
   const completeTaskMutation = useMutation({
     mutationFn: (taskId: string) => 
-      crmFetch(`/api/workspace/tasks/${taskId}/complete`, { method: 'POST' }).then(res => res.json()),
+      fetch(`/api/workspace/tasks/${taskId}/complete`, { method: 'POST' }).then(res => res.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspace/tasks'] });
       queryClient.invalidateQueries({ queryKey: ['/api/workspace/stats'] });

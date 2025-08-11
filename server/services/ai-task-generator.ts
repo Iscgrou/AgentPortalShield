@@ -15,7 +15,6 @@ import type {
 
 // Persian date utilities (ES module compatible)
 import persianDate from 'persian-date';
-import { nowPersian, addHoursPersian } from '../lib/persian-time';
 
 export interface TaskGenerationContext {
   managerTasks: ManagerTask[];
@@ -302,18 +301,18 @@ export class AITaskGenerator {
    * Apply Persian scheduling and datetime
    */
   private applyPersianScheduling(tasks: Partial<WorkspaceTask>[]): WorkspaceTask[] {
-  const now = new persianDate();
+    const now = new persianDate();
     
     return tasks.map((task, index) => {
       // Generate unique task ID
       const taskId = `TASK-${now.format('YYYY-MM-DD')}-${(index + 1).toString().padStart(3, '0')}`;
       
       // Schedule task for immediate assignment
-  const assignedAt = nowPersian();
+      const assignedAt = now.format('YYYY/MM/DD HH:mm:ss');
       
       // Set deadline based on priority
-  const deadlineHours = this.getDeadlineHours(task.priority || 'MEDIUM');
-  const deadline = addHoursPersian(deadlineHours);
+      const deadlineHours = this.getDeadlineHours(task.priority || 'MEDIUM');
+      const deadline = now.clone().add(deadlineHours, 'hours').format('YYYY/MM/DD HH:mm:ss');
 
       return {
         id: taskId,
@@ -373,8 +372,7 @@ export class AITaskGenerator {
   private extractCulturalFactors(tasks: WorkspaceTask[]): string[] {
     const factors = new Set<string>();
     tasks.forEach(task => {
-      const ctx: any = task.aiContext as any;
-      (ctx?.culturalConsiderations || []).forEach((factor: any) => factors.add(factor));
+      task.aiContext.culturalConsiderations.forEach((factor: any) => factors.add(factor));
     });
     return Array.from(factors);
   }
@@ -383,8 +381,7 @@ export class AITaskGenerator {
     if (tasks.length === 0) return 0;
     
     const totalConfidence = tasks.reduce((sum, task) => {
-      const ctx: any = task.aiContext as any;
-      return sum + ((ctx?.riskLevel || 0) * 20); // Convert risk to confidence
+      return sum + (task.aiContext.riskLevel || 0) * 20; // Convert risk to confidence
     }, 0);
     
     return Math.round(totalConfidence / tasks.length);

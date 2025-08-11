@@ -79,40 +79,39 @@ async function testXaiGrokApi(apiKey: string): Promise<any> {
   }
 }
 
-// Encryption functions for API keys (AES-256-GCM)
-function getEncKey(): Buffer {
-  const secretKey = process.env.ENCRYPTION_KEY || 'default-secret-key-change-in-production';
-  return crypto.scryptSync(secretKey, 'salt', 32);
-}
-
-// Format: ivHex:cipherHex:tagHex
+// Encryption functions for API keys
 function encryptApiKey(apiKey: string): string {
   try {
-    const key = getEncKey();
-    const iv = crypto.randomBytes(12); // GCM recommended IV length
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    const enc = Buffer.concat([cipher.update(apiKey, 'utf8'), cipher.final()]);
-    const tag = cipher.getAuthTag();
-    return `${iv.toString('hex')}:${enc.toString('hex')}:${tag.toString('hex')}`;
+    const algorithm = 'aes-256-cbc';
+    const secretKey = process.env.ENCRYPTION_KEY || 'default-secret-key-change-in-production';
+    const key = crypto.scryptSync(secretKey, 'salt', 32);
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipher(algorithm, key);
+    
+    let encrypted = cipher.update(apiKey, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    return `${iv.toString('hex')}:${encrypted}`;
   } catch (error) {
     console.error('Encryption error:', error);
-    // Do not leak plaintext; return a sentinel
-    return '';
+    return apiKey; // Fallback to plain text in case of error
   }
 }
 
-function decryptApiKey(payload: string): string {
+function decryptApiKey(encryptedApiKey: string): string {
   try {
-    const [ivHex, dataHex, tagHex] = payload.split(':');
-    if (!ivHex || !dataHex || !tagHex) throw new Error('Invalid payload');
-    const key = getEncKey();
+    const algorithm = 'aes-256-gcm';
+    const secretKey = process.env.ENCRYPTION_KEY || 'default-secret-key-change-in-production';
+    const key = crypto.scryptSync(secretKey, 'salt', 32);
+    
+    const [ivHex, encrypted] = encryptedApiKey.split(':');
     const iv = Buffer.from(ivHex, 'hex');
-    const data = Buffer.from(dataHex, 'hex');
-    const tag = Buffer.from(tagHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(tag);
-    const dec = Buffer.concat([decipher.update(data), decipher.final()]);
-    return dec.toString('utf8');
+    const decipher = crypto.createDecipher(algorithm, key);
+    
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
   } catch (error) {
     throw new Error('خطا در رمزگشایی کلید API');
   }
@@ -144,22 +143,10 @@ export function registerSettingsRoutes(app: Express) {
     }
   };
 
-  // Manager gate - requires session flag set by /api/crm/auth/manager-unlock
-  const managerGate = (req: any, res: any, next: any) => {
-    const unlocked = req.session?.crmManager === true;
-    const exp = req.session?.crmManagerExpiry ? Number(req.session.crmManagerExpiry) : 0;
-    if (!unlocked || !exp || Date.now() > exp) {
-      req.session.crmManager = false;
-      req.session.crmManagerExpiry = undefined;
-      return res.status(403).json({ error: 'دسترسی مدیر تایید نشده' });
-    }
-    next();
-  };
-
   // ==================== CRM SETTINGS ROUTES ====================
 
   // Get all CRM settings by category
-  app.get('/api/crm/settings/:category?', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.get('/api/crm/settings/:category?', crmAuthMiddleware, async (req, res) => {
     try {
       const { category } = req.params;
       const settings = await settingsStorage.getCrmSettings(category);
@@ -183,20 +170,15 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Create or update CRM setting
-  app.post('/api/crm/settings', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.post('/api/crm/settings', crmAuthMiddleware, async (req, res) => {
     try {
       const validatedData = insertCrmSettingSchema.parse(req.body);
       
       // Handle API key encryption
       if (validatedData.category === 'API_KEYS' && validatedData.value) {
-        const raw = validatedData.value;
-        const enc = encryptApiKey(raw);
-        if (!enc) {
-          throw new Error('خطا در رمزگذاری کلید API');
-        }
-        validatedData.encryptedValue = enc;
-        // Mask value: keep only last 4 chars
-        validatedData.value = '***' + raw.slice(-4);
+        validatedData.encryptedValue = encryptApiKey(validatedData.value);
+        // Keep last 4 characters for display
+        validatedData.value = '***' + validatedData.value.slice(-4);
       }
 
       // Check if setting exists
@@ -216,7 +198,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Test xAI Grok API key
-  app.post('/api/crm/settings/test-xai-api', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.post('/api/crm/settings/test-xai-api', crmAuthMiddleware, async (req, res) => {
     try {
       const { apiKey } = req.body;
       
@@ -266,7 +248,7 @@ export function registerSettingsRoutes(app: Express) {
   // ==================== SUPPORT STAFF ROUTES ====================
 
   // Get all support staff
-  app.get('/api/crm/settings/support-staff', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.get('/api/crm/settings/support-staff', crmAuthMiddleware, async (req, res) => {
     try {
       const staff = await settingsStorage.getSupportStaff();
       res.json({ success: true, data: staff });
@@ -276,7 +258,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Create support staff
-  app.post('/api/crm/settings/support-staff', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.post('/api/crm/settings/support-staff', crmAuthMiddleware, async (req, res) => {
     try {
       const validatedData = insertSupportStaffSchema.parse(req.body);
       const result = await settingsStorage.createSupportStaff(validatedData);
@@ -287,7 +269,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Update support staff
-  app.put('/api/crm/settings/support-staff/:id', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.put('/api/crm/settings/support-staff/:id', crmAuthMiddleware, async (req, res) => {
     try {
       const { id } = req.params;
       const validatedData = insertSupportStaffSchema.partial().parse(req.body);
@@ -301,7 +283,7 @@ export function registerSettingsRoutes(app: Express) {
   // ==================== AI KNOWLEDGE DATABASE ROUTES ====================
 
   // Get AI knowledge entries
-  app.get('/api/crm/settings/ai-knowledge/:category?', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.get('/api/crm/settings/ai-knowledge/:category?', crmAuthMiddleware, async (req, res) => {
     try {
       const { category } = req.params;
       const knowledge = await settingsStorage.getAiKnowledge(category);
@@ -312,7 +294,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Create AI knowledge entry
-  app.post('/api/crm/settings/ai-knowledge', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.post('/api/crm/settings/ai-knowledge', crmAuthMiddleware, async (req, res) => {
     try {
       const validatedData = insertAiKnowledgeSchema.parse(req.body);
       const result = await settingsStorage.createAiKnowledge(validatedData);
@@ -325,7 +307,7 @@ export function registerSettingsRoutes(app: Express) {
   // ==================== OFFERS & INCENTIVES ROUTES ====================
 
   // Get all offers
-  app.get('/api/crm/settings/offers', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.get('/api/crm/settings/offers', crmAuthMiddleware, async (req, res) => {
     try {
       const offers = await settingsStorage.getOffers();
       res.json({ success: true, data: offers });
@@ -335,7 +317,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Create offer
-  app.post('/api/crm/settings/offers', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.post('/api/crm/settings/offers', crmAuthMiddleware, async (req, res) => {
     try {
       const validatedData = insertOfferIncentiveSchema.parse(req.body);
       const result = await settingsStorage.createOffer(validatedData);
@@ -348,7 +330,7 @@ export function registerSettingsRoutes(app: Express) {
   // ==================== MANAGER WORKSPACE ROUTES ====================
 
   // Get manager tasks
-  app.get('/api/crm/settings/manager-tasks/:status?', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.get('/api/crm/settings/manager-tasks/:status?', crmAuthMiddleware, async (req, res) => {
     try {
       const { status } = req.params;
       const tasks = await settingsStorage.getManagerTasks(status);
@@ -359,7 +341,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Create manager task
-  app.post('/api/crm/settings/manager-tasks', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.post('/api/crm/settings/manager-tasks', crmAuthMiddleware, async (req, res) => {
     try {
       const validatedData = insertManagerTaskSchema.parse(req.body);
       validatedData.createdBy = 'CRM_MANAGER'; // Set from session
@@ -371,7 +353,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Update manager task
-  app.put('/api/crm/settings/manager-tasks/:taskId', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.put('/api/crm/settings/manager-tasks/:taskId', crmAuthMiddleware, async (req, res) => {
     try {
       const { taskId } = req.params;
       const validatedData = insertManagerTaskSchema.partial().parse(req.body);
@@ -383,7 +365,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Delete manager task
-  app.delete('/api/crm/settings/manager-tasks/:taskId', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.delete('/api/crm/settings/manager-tasks/:taskId', crmAuthMiddleware, async (req, res) => {
     try {
       const { taskId } = req.params;
       await settingsStorage.deleteManagerTask(taskId);
@@ -394,7 +376,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Get task executions
-  app.get('/api/crm/settings/task-executions/:taskId?', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.get('/api/crm/settings/task-executions/:taskId?', crmAuthMiddleware, async (req, res) => {
     try {
       const { taskId } = req.params;
       const executions = await settingsStorage.getTaskExecutions(taskId);
@@ -405,7 +387,7 @@ export function registerSettingsRoutes(app: Express) {
   });
 
   // Test AI Performance with behavior configuration
-  app.post('/api/crm/settings/test-ai-performance', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.post('/api/crm/settings/test-ai-performance', crmAuthMiddleware, async (req, res) => {
     try {
       const { apiKey, behaviorConfig, testScenario } = req.body;
       
@@ -574,7 +556,7 @@ export function registerSettingsRoutes(app: Express) {
   // ==================== AI TEST RESULTS ROUTES ====================
 
   // Get AI test results
-  app.get('/api/crm/settings/test-results/:testType?', crmAuthMiddleware, managerGate, async (req, res) => {
+  app.get('/api/crm/settings/test-results/:testType?', crmAuthMiddleware, async (req, res) => {
     try {
       const { testType } = req.params;
       const { limit = 10 } = req.query;

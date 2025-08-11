@@ -309,10 +309,43 @@ ${creativityLevel > 0.6 ? 'از ایده‌های خلاقانه و نوآورا
   }
 
   // Generate cultural insights for Persian business context
-  // Back-compat wrapper: older callers pass (representative, prompt) expecting a JSON string
   async generateCulturalInsights(representative: any, prompt: string): Promise<string> {
-    const data = await this.generateCulturalInsightsData({ representative, context: prompt });
-    return JSON.stringify(data);
+    if (!this.isConfigured) {
+      return this.getFallbackCulturalInsights(representative);
+    }
+
+    try {
+      const culturalPrompt = `
+شما یک متخصص روان‌شناسی تجاری هستید که در فرهنگ کسب‌وکار ایران تخصص دارید.
+
+اطلاعات نماینده:
+نام: ${representative.name || 'نماینده'}
+شهر: ${representative.city || 'نامشخص'}
+
+درخواست: ${prompt}
+
+لطفا پاسخ خود را در قالب JSON با کلیدهای زیر ارائه دهید:
+{
+  "culturalNotes": ["نکته فرهنگی 1", "نکته فرهنگی 2"],
+  "suggestedApproach": "پیشنهاد رویکرد",
+  "riskLevel": عدد از 1 تا 5,
+  "bestContactTime": "بهترین زمان تماس",
+  "culturalSensitivity": "نکات حساسیت فرهنگی"
+}
+`;
+
+      const response = await this.client.chat.completions.create({
+        model: "grok-2-1212",
+        messages: [{ role: "user", content: culturalPrompt }],
+        max_tokens: 500,
+        temperature: 0.7
+      });
+
+      return response.choices[0]?.message?.content || this.getFallbackCulturalInsights(representative);
+    } catch (error) {
+      console.error('Cultural insights generation failed:', error);
+      return this.getFallbackCulturalInsights(representative);
+    }
   }
 
   private getFallbackCulturalInsights(representative: any): string {
@@ -397,7 +430,61 @@ ${config.culturalMetaphors ? 'از استعاره‌های فرهنگی ایرا
   }
 
   // Financial data analysis using Grok
-  // Keep a single implementation; provide at bottom only
+  async analyzeFinancialData(
+    totalRevenue: number,
+    totalDebt: number, 
+    activeReps: number,
+    overdueInvoices: number
+  ): Promise<any> {
+    if (!this.isConfigured) {
+      return {
+        summary: "تحلیل مالی پایه بر اساس الگوها",
+        insights: [
+          "نرخ بدهی فعلی قابل قبول است",
+          "تعداد نمایندگان فعال مناسب است",
+          "فاکتورهای معوقه نیاز به پیگیری دارند"
+        ],
+        recommendations: [
+          "تمرکز بر وصول مطالبات معوقه",
+          "توسعه شبکه نمایندگان",
+          "بهبود فرآیند پیگیری"
+        ]
+      };
+    }
+
+    try {
+      const prompt = `
+تحلیل وضعیت مالی شرکت:
+
+📊 آمار مالی:
+- درآمد کل: ${totalRevenue.toLocaleString('fa-IR')} ریال
+- بدهی کل: ${totalDebt.toLocaleString('fa-IR')} ریال  
+- نمایندگان فعال: ${activeReps}
+- فاکتورهای معوقه: ${overdueInvoices}
+
+لطفا تحلیل کاملی از وضعیت مالی ارائه ده و راه‌کارهای عملی پیشنهاد کن.
+پاسخ را در قالب JSON ارائه ده:
+{
+  "summary": "خلاصه وضعیت",
+  "insights": ["بینش 1", "بینش 2"],
+  "recommendations": ["توصیه 1", "توصیه 2"],
+  "risk_level": "low|medium|high"
+}
+`;
+
+      const response = await this.client.chat.completions.create({
+        model: "grok-2-1212",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        max_tokens: 800
+      });
+
+      return JSON.parse(response.choices[0].message.content || '{}');
+    } catch (error) {
+      console.error('Financial analysis failed:', error);
+      return this.analyzeFinancialData(totalRevenue, totalDebt, activeReps, overdueInvoices);
+    }
+  }
 
   // Answer financial questions using Grok
   async answerFinancialQuestion(question: string): Promise<string> {
@@ -637,7 +724,7 @@ ${config.culturalMetaphors ? 'از استعاره‌های فرهنگی ایرا
   }
 
   // SHERLOCK v1.0 CRITICAL FIX - Add missing generateCulturalInsights with proper signature  
-  async generateCulturalInsightsData(data: {
+  async generateCulturalInsights(data: {
     representative: Representative;
     context?: string;
   }): Promise<any> {

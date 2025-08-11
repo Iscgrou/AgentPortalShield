@@ -6,8 +6,7 @@
 import { XAIGrokEngine } from './xai-grok-engine';
 import { db } from '../db.js';
 import { sql } from 'drizzle-orm';
-import persianDate from 'persian-date';
-import { addDaysPersian } from '../lib/persian-time';
+import * as persianDate from 'persian-date';
 
 export interface TaskReport {
   id: string;
@@ -28,12 +27,6 @@ export interface ReportAnalysis {
   nextContactDate?: string;
   priorityLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   aiConfidence: number;
-  // Explainability bundle (not directly persisted as its own column)
-  explainability?: {
-    reasonCodes: string[];
-    evidence: string[];
-    summary: string;
-  };
 }
 
 export interface FollowUpAction {
@@ -61,7 +54,7 @@ export class ReportAnalyzer {
   /**
    * تحلیل گزارش کارمند و استخراج insights
    */
-  async analyzeReport(report: TaskReport, options?: { persist?: boolean }): Promise<ReportAnalysis> {
+  async analyzeReport(report: TaskReport): Promise<ReportAnalysis> {
     try {
       console.log(`🔍 Analyzing report ${report.id} for representative ${report.representativeId}`);
 
@@ -83,30 +76,14 @@ export class ReportAnalyzer {
         aiConfidence: aiAnalysis.confidence || 75
       };
 
-      // Explainability: derive reasons and evidence, and blend into persisted fields for transparency
-      const evidence = this.extractEvidence(report, aiAnalysis);
-      const reasonCodes = this.deriveReasonCodes(report, analysis, aiAnalysis);
-      const summary = this.buildExplainabilitySummary(reasonCodes, evidence, analysis);
-      analysis.explainability = { reasonCodes, evidence, summary };
-
-      // Persist explainability by embedding markers in existing arrays (no schema change)
-      if (reasonCodes.length) {
-        analysis.keyInsights = [...analysis.keyInsights, ...reasonCodes.map(rc => `[WHY] ${rc}`)];
-      }
-      if (evidence.length) {
-        analysis.culturalContext = [...analysis.culturalContext, ...evidence.map(ev => `[EVIDENCE] ${ev}`)];
-      }
-
-      // Save analysis to database unless explicitly disabled
-      if (options?.persist !== false) {
-        await this.saveAnalysis(analysis);
-      }
+      // Save analysis to database
+      await this.saveAnalysis(analysis);
       
       console.log(`✅ Report analysis completed with ${analysis.followUpActions.length} follow-up actions`);
       return analysis;
 
     } catch (error) {
-  console.error('Error analyzing report:', error);
+      console.error('Error analyzing report:', error);
       throw error;
     }
   }
@@ -270,84 +247,6 @@ JSON format:
   }
 
   /**
-   * استخراج شواهد (Evidence) از گزارش و خروجی AI
-   */
-  private extractEvidence(report: TaskReport, aiAnalysis: any): string[] {
-    const ev = new Set<string>();
-    const text = report.reportContent || '';
-
-    //Amounts with currency keywords
-    const amtRegex = /(\d+[\d,\.]*)(\s*)(تومان|ریال)/g;
-    let m;
-    while ((m = amtRegex.exec(text)) !== null) {
-      ev.add(`مبلغ اشاره‌شده: ${m[0]}`);
-    }
-    // Dates (Persian style like 1404/06/15)
-    const dateRegex = /(13|14)\d{2}[\/\-](0?[1-9]|1[0-2])[\/\-](0?[1-9]|[12]\d|3[01])/g;
-    while ((m = dateRegex.exec(text)) !== null) {
-      ev.add(`تاریخ ذکرشده: ${m[0]}`);
-    }
-    // Time markers
-    const markers = ['امروز', 'فردا', 'هفته آینده', 'ماه آینده', 'دیروز'];
-    for (const mk of markers) {
-      if (text.includes(mk)) ev.add(`نشانه زمانی: ${mk}`);
-    }
-    // Keywords evidences
-    const kmap: Record<string, string> = {
-      'پرداخت': 'بحث پرداخت/تعهد مالی',
-      'قسط': 'اشاره به قسط‌بندی',
-      'تاخیر': 'وجود تاخیر در انجام تعهد',
-      'مشکل': 'وجود مشکل عملیاتی/فنی',
-      'فنی': 'مسئله فنی محتمل',
-      'پشتیبانی': 'نیاز به پشتیبانی'
-    };
-    for (const [kw, desc] of Object.entries(kmap)) {
-      if (text.includes(kw)) ev.add(`کلیدواژه: ${kw} (${desc})`);
-    }
-    // From AI analysis if present
-    if (aiAnalysis?.customerMood) ev.add(`تشخیص احساس مشتری: ${aiAnalysis.customerMood}`);
-    if (Array.isArray(aiAnalysis?.keyPoints)) {
-      for (const kp of aiAnalysis.keyPoints.slice(0, 3)) ev.add(`نکته کلیدی AI: ${kp}`);
-    }
-    return Array.from(ev);
-  }
-
-  /**
-   * تولید کدهای دلیل (Reason Codes) برای شفافیت تصمیم
-   */
-  private deriveReasonCodes(report: TaskReport, parsed: ReportAnalysis, aiAnalysis: any): string[] {
-    const codes: string[] = [];
-    const txt = report.reportContent || '';
-    const has = (s: string) => txt.includes(s);
-
-    // Map from insights and AI outputs to reason codes
-    for (const ins of parsed.keyInsights) {
-      if (ins.includes('عدم پاسخ')) codes.push('NO_RESPONSE');
-      if (ins.includes('مثبت') || ins.includes('صمیمانه')) codes.push('POSITIVE_ATTITUDE');
-      if (ins.includes('مشکل')) codes.push('TECHNICAL_OR_OPERATIONAL_ISSUE');
-      if (ins.includes('پرداخت') || ins.includes('بدهی') || ins.includes('هزینه')) codes.push('PAYMENT_CONCERN');
-    }
-    if (aiAnalysis?.priority >= 4) codes.push('HIGH_URGENCY_AI');
-    if (has('وعده پرداخت') || has('تسویه')) codes.push('PROMISED_PAYMENT');
-    if (has('قسط') || has('تقسیط')) codes.push('INSTALLMENT_PLAN');
-    if (has('فردا') || has('هفته آینده')) codes.push('FOLLOWUP_TIME_HINT');
-
-    // Deduplicate
-    return Array.from(new Set(codes));
-  }
-
-  /**
-   * ساخت خلاصه Explainability برای نمایش انسان‌خوانا
-   */
-  private buildExplainabilitySummary(reasonCodes: string[], evidence: string[], analysis: ReportAnalysis): string {
-    const parts: string[] = [];
-    if (reasonCodes.length) parts.push(`دلایل: ${reasonCodes.join(', ')}`);
-    if (evidence.length) parts.push(`شواهد: ${evidence.slice(0, 3).join(' | ')}`);
-    parts.push(`اولویت: ${analysis.priorityLevel}, اطمینان AI: ${Math.round(analysis.aiConfidence)}%`);
-    return parts.join(' — ');
-  }
-
-  /**
    * محاسبه تاریخ تماس بعدی
    */
   private calculateNextContactDate(report: TaskReport, aiAnalysis: any): string {
@@ -405,7 +304,8 @@ JSON format:
    * دریافت روز کاری بعدی
    */
   private getNextWorkday(): string {
-  return addDaysPersian(1, 'YYYY-MM-DD');
+    const tomorrow = new persianDate().add(1, 'day');
+    return tomorrow.format('YYYY-MM-DD');
   }
 
   /**

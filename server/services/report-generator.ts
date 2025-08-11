@@ -1,6 +1,5 @@
 import { storage } from "../storage";
-import { toPersianDigits } from "./invoice";
-import { nowPersian } from "../lib/persian-time";
+import { toPersianDigits, getCurrentPersianDate } from "./invoice";
 
 export async function generateFinancialReport() {
   try {
@@ -9,7 +8,7 @@ export async function generateFinancialReport() {
     const invoices = await storage.getInvoices();
     
     const report = {
-      generatedAt: nowPersian('YYYY/MM/DD HH:mm:ss'),
+      generatedAt: getCurrentPersianDate(),
       summary: {
         totalRevenue: dashboardData.totalRevenue,
         totalDebt: dashboardData.totalDebt,

@@ -1,5 +1,3 @@
-// Load environment variables as early as possible so downstream imports (e.g., db.ts) see them
-import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -69,10 +67,10 @@ const sessionMiddleware = session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // true in prod behind HTTPS
+    secure: false, // Set to true in production with HTTPS
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // absolute max cookie lifetime
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+    maxAge: 7 * 24 * 60 * 60 * 1000, // Extended to 7 days for better UX
+    sameSite: 'lax' // Better cross-origin handling
   },
   name: 'marfanet.sid', // Custom session name for identification
   rolling: true // Extend session on activity
@@ -93,33 +91,6 @@ app.use((req, res, next) => {
 
 // Performance monitoring middleware
 app.use(performanceMonitoringMiddleware);
-
-// Session idle and absolute timeout enforcement
-const IDLE_TIMEOUT_MS = Number(process.env.SESSION_IDLE_TIMEOUT_MS || 30 * 60 * 1000); // 30m
-const ABSOLUTE_TIMEOUT_MS = Number(process.env.SESSION_ABSOLUTE_TIMEOUT_MS || 7 * 24 * 60 * 60 * 1000); // 7d
-app.use((req, res, next) => {
-  // Skip for portal and health endpoints
-  if (req.path.startsWith('/portal') || req.path.startsWith('/api/portal') || req.path === '/health' || req.path === '/ready') {
-    return next();
-  }
-  const s: any = (req as any).session;
-  if (!s) return next();
-  const now = Date.now();
-  if (!s.createdAt) s.createdAt = now;
-  if (!s.lastActivity) s.lastActivity = now;
-  const idle = now - s.lastActivity;
-  const age = now - s.createdAt;
-  if (idle > IDLE_TIMEOUT_MS || age > ABSOLUTE_TIMEOUT_MS) {
-    // Destroy session and signal expiry
-    req.session.destroy(() => {
-      res.status(401).json({ error: 'SESSION_EXPIRED', reason: idle > IDLE_TIMEOUT_MS ? 'IDLE_TIMEOUT' : 'ABSOLUTE_TIMEOUT' });
-    });
-    return;
-  }
-  // Update last activity timestamp
-  s.lastActivity = now;
-  next();
-});
 
 // Response compression middleware  
 // Compression middleware removed for simplified system
@@ -200,11 +171,6 @@ app.use((req, res, next) => {
   }
 
   const server = await registerRoutes(app);
-
-  // Ensure unmatched API routes never fall through to SPA (strict)
-  app.all(/^\/api\//, (req, res) => {
-    return res.status(404).json({ error: 'API route not found', path: req.path, method: req.method });
-  });
 
   // SHERLOCK v16.2 DEPLOYMENT STABILITY: Enhanced health endpoints with comprehensive checks
   app.get('/health', async (req, res) => {

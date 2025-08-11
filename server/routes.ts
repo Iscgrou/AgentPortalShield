@@ -28,6 +28,7 @@ import {
   validateUsageData, 
   getOrCreateDefaultSalesPartner, 
   createRepresentativeFromUsageData,
+  getCurrentPersianDate,
   addDaysToPersianDate,
   toPersianDigits 
 } from "./services/invoice";
@@ -263,15 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Logout error:", err);
         return res.status(500).json({ error: "خطا در فرآیند خروج" });
       }
-      // Clear the correct session cookie set in server/index.ts (name: 'marfanet.sid')
-      // Match key cookie options to ensure the browser removes it successfully
-      res.clearCookie('marfanet.sid', {
-        path: '/',
-        sameSite: 'lax',
-        // secure should match session cookie; in production behind HTTPS set to true
-        secure: false,
-        httpOnly: true,
-      });
+      res.clearCookie('connect.sid');
       res.json({ success: true, message: "خروج موفقیت‌آمیز" });
     });
   });
@@ -816,19 +809,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Deep audit: allocation details for a specific payment
-  app.get("/api/payments/:id/allocation-details", requireAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (Number.isNaN(id)) return res.status(400).json({ error: "شناسه نامعتبر است" });
-      const details = await storage.getPaymentAllocationDetails(id);
-      if (!details.payment) return res.status(404).json({ error: "پرداخت یافت نشد" });
-      res.json(details);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت جزئیات تخصیص پرداخت" });
-    }
-  });
-
   app.get("/api/payments/representative/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -844,10 +824,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertPaymentSchema.parse(req.body);
       const payment = await storage.createPayment(validatedData);
       
-      // Phase 3: allow skipping auto-allocation via query (?skipAuto=true or &auto=false)
-      const skipAuto = (req.query.skipAuto === 'true') || (req.query.auto === 'false');
-      // Auto-allocate to oldest unpaid invoice if representativeId provided and auto is not skipped
-      if (validatedData.representativeId && !skipAuto) {
+      // Auto-allocate to oldest unpaid invoice if representativeId provided
+      if (validatedData.representativeId) {
         await storage.autoAllocatePaymentToInvoices(payment.id, validatedData.representativeId);
       }
       
@@ -880,44 +858,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(payment);
     } catch (error) {
       res.status(500).json({ error: "خطا در تخصیص پرداخت" });
-    }
-  });
-
-  // Alias finance routes to avoid any potential path conflicts
-  app.get("/api/finance/payments/:id/allocation", requireAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (Number.isNaN(id)) return res.status(400).json({ error: "شناسه نامعتبر است" });
-      const details = await storage.getPaymentAllocationDetails(id);
-      if (!details.payment) return res.status(404).json({ error: "پرداخت یافت نشد" });
-      res.json(details);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت جزئیات تخصیص پرداخت" });
-    }
-  });
-
-  app.get("/api/finance/representatives/:id/summary", requireAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (Number.isNaN(id)) return res.status(400).json({ error: "شناسه نامعتبر است" });
-      const summary = await storage.getRepresentativeFinancialSummary(id);
-      if (!summary.representative) return res.status(404).json({ error: "نماینده یافت نشد" });
-      res.json(summary);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت جمع‌بندی مالی نماینده" });
-    }
-  });
-
-  // Representative financial summary (unpaid, totals, credit, payment stats)
-  app.get("/api/representatives/:id/financial-summary", requireAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (Number.isNaN(id)) return res.status(400).json({ error: "شناسه نامعتبر است" });
-      const summary = await storage.getRepresentativeFinancialSummary(id);
-      if (!summary.representative) return res.status(404).json({ error: "نماینده یافت نشد" });
-      res.json(summary);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت جمع‌بندی مالی نماینده" });
     }
   });
 
@@ -973,7 +913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "نماینده یافت نشد" });
       }
 
-  const insights = await xaiGrokEngine.generateCulturalInsightsData({
+      const insights = await xaiGrokEngine.generateCulturalInsights({
         representative,
         context: "business_relationship_management"
       });
@@ -985,7 +925,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Invoices API - Protected
-  // NOTE: Canonical implementation is defined later with enhanced logging (SHERLOCK v12.1)
+  app.get("/api/invoices", requireAuth, async (req, res) => {
+    try {
+      const invoices = await storage.getInvoices();
+      res.json(invoices);
+    } catch (error) {
+      res.status(500).json({ error: "خطا در دریافت فاکتورها" });
+    }
+  });
 
   // Unpaid Invoices by Representative API - SHERLOCK v1.0 CRITICAL FIX
   app.get("/api/invoices/unpaid/:representativeId", requireAuth, async (req, res) => {
@@ -1026,10 +973,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // فاز ۱: دریافت پارامترهای batch و تاریخ از request body
-  const { batchName, periodStart, periodEnd, description, invoiceDateMode, customInvoiceDate, discountPercent, taxPercent, rounding } = req.body;
+      const { batchName, periodStart, periodEnd, description, invoiceDateMode, customInvoiceDate } = req.body;
       console.log('Batch params:', { batchName, periodStart, periodEnd, description });
-  console.log('Invoice date params:', { invoiceDateMode, customInvoiceDate });
-  console.log('Calculation params:', { discountPercent, taxPercent, rounding });
+      console.log('Invoice date params:', { invoiceDateMode, customInvoiceDate });
 
       console.log('File details:', {
         originalname: req.file.originalname,
@@ -1101,43 +1047,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('📅 Invoice date configuration:', { mode: invoiceDateMode, date: invoiceDate });
       
-      // Strict validation for calculation params
-      const allowedRounding = new Set(['nearest', 'floor', 'ceil']);
-
-      if (typeof rounding !== 'undefined' && !allowedRounding.has(String(rounding))) {
-        return res.status(400).json({
-          error: "rounding نامعتبر است",
-          details: "rounding باید یکی از مقادیر nearest, floor, ceil باشد"
-        });
-      }
-
-      const parsedDiscount = (typeof discountPercent !== 'undefined' && String(discountPercent).trim() !== '')
-        ? Number(discountPercent)
-        : undefined;
-      if (typeof parsedDiscount !== 'undefined' && (Number.isNaN(parsedDiscount) || parsedDiscount < 0 || parsedDiscount > 100)) {
-        return res.status(400).json({
-          error: "درصد تخفیف نامعتبر است",
-          details: "discountPercent باید عددی بین ۰ تا ۱۰۰ باشد"
-        });
-      }
-
-      const parsedTax = (typeof taxPercent !== 'undefined' && String(taxPercent).trim() !== '')
-        ? Number(taxPercent)
-        : undefined;
-      if (typeof parsedTax !== 'undefined' && (Number.isNaN(parsedTax) || parsedTax < 0 || parsedTax > 100)) {
-        return res.status(400).json({
-          error: "درصد مالیات نامعتبر است",
-          details: "taxPercent باید عددی بین ۰ تا ۱۰۰ باشد"
-        });
-      }
-
-      const calcOptions = {
-        discountPercent: parsedDiscount,
-        taxPercent: parsedTax,
-        rounding: (typeof rounding === 'string' && allowedRounding.has(rounding)) ? rounding as 'nearest' | 'floor' | 'ceil' : 'nearest'
-      } as const;
-
-      const sequentialResult = await processUsageDataSequential(valid, storage, invoiceDate, calcOptions);
+      const sequentialResult = await processUsageDataSequential(valid, storage, invoiceDate);
       const createdInvoices = [];
       const { processedInvoices, newRepresentatives, statistics } = sequentialResult;
       
@@ -1351,7 +1261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // MISSING API: Get all invoices - SHERLOCK v12.1 CRITICAL FIX (Canonical)
+  // MISSING API: Get all invoices - SHERLOCK v12.1 CRITICAL FIX
   app.get("/api/invoices", requireAuth, async (req, res) => {
     try {
       console.log('📋 SHERLOCK v12.1: Fetching all invoices for main invoices page');
@@ -1794,19 +1704,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Phase 3: Batch auto-allocate all unallocated payments for a representative (FIFO)
-  app.post("/api/payments/auto-allocate/batch/:representativeId", requireAuth, async (req, res) => {
-    try {
-      const representativeId = parseInt(req.params.representativeId);
-      if (Number.isNaN(representativeId)) return res.status(400).json({ error: "شناسه نامعتبر است" });
-      const result = await storage.autoAllocatePayments(representativeId);
-      res.json({ success: true, ...result });
-    } catch (error) {
-      console.error('Error in batch auto-allocation:', error);
-      res.status(500).json({ error: "خطا در تخصیص خودکار دسته‌ای پرداخت‌ها" });
-    }
-  });
-
   // CRM debt synchronization endpoint - Enhanced Financial Synchronization
   app.post("/api/crm/representatives/:id/sync-debt", requireAuth, async (req, res) => {
     try {
@@ -1928,7 +1825,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Removed duplicate manual payment allocation endpoint.
+  // Manual payment allocation API
+  // SHERLOCK v11.5: Manual payment allocation API with real-time status calculation
+  app.post("/api/payments/allocate", requireAuth, async (req, res) => {
+    try {
+      const { paymentId, invoiceId } = req.body;
+      
+      if (!paymentId || !invoiceId) {
+        return res.status(400).json({ error: "شناسه پرداخت و فاکتور الزامی است" });
+      }
+
+      const updatedPayment = await storage.allocatePaymentToInvoice(paymentId, invoiceId);
+      
+      // CRITICAL: Recalculate invoice status based on actual payment allocations
+      const calculatedStatus = await storage.calculateInvoicePaymentStatus(invoiceId);
+      await storage.updateInvoice(invoiceId, { status: calculatedStatus });
+      console.log(`📊 Manual allocation: Invoice ${invoiceId} status updated to: ${calculatedStatus}`);
+      
+      await storage.createActivityLog({
+        type: "manual_payment_allocation",
+        description: `پرداخت ${paymentId} به فاکتور ${invoiceId} تخصیص یافت - وضعیت: ${calculatedStatus}`,
+        relatedId: paymentId,
+        metadata: {
+          paymentId,
+          invoiceId,
+          amount: updatedPayment.amount,
+          newInvoiceStatus: calculatedStatus
+        }
+      });
+
+      res.json({ success: true, payment: updatedPayment, invoiceStatus: calculatedStatus });
+    } catch (error) {
+      console.error('Error allocating payment:', error);
+      res.status(500).json({ error: "خطا در تخصیص دستی پرداخت" });
+    }
+  });
 
   // SHERLOCK v11.5: CRITICAL - Batch Invoice Status Recalculation API
   app.post("/api/invoices/recalculate-statuses", requireAuth, async (req, res) => {
@@ -2049,7 +1980,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
-  // Payments API - Protected (duplicate definitions removed; canonical versions are earlier)
+  // Payments API - Protected
+  app.get("/api/payments", requireAuth, async (req, res) => {
+    try {
+      const payments = await storage.getPayments();
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ error: "خطا در دریافت پرداخت‌ها" });
+    }
+  });
+
+  app.post("/api/payments", requireAuth, async (req, res) => {
+    try {
+      const validatedData = insertPaymentSchema.parse(req.body);
+      const payment = await storage.createPayment(validatedData);
+      res.json(payment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "داده‌های ورودی نامعتبر", details: error.errors });
+      } else {
+        res.status(500).json({ error: "خطا در ثبت پرداخت" });
+      }
+    }
+  });
+
+  app.put("/api/payments/:id/allocate", requireAuth, async (req, res) => {
+    try {
+      const paymentId = parseInt(req.params.id);
+      const { invoiceId } = req.body;
+      
+      await storage.allocatePaymentToInvoice(paymentId, invoiceId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "خطا در تخصیص پرداخت" });
+    }
+  });
 
   // فاز ۱: Invoice Batches API - مدیریت دوره‌ای فاکتورها
   app.get("/api/invoice-batches", requireAuth, async (req, res) => {
@@ -2439,31 +2404,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Financial transaction management API routes
   app.get("/api/financial/transactions", requireAuth, async (req, res) => {
     try {
-      const page = parseInt((req.query.page as string) || '1');
-      const limit = parseInt((req.query.limit as string) || '30');
-      const representativeId = req.query.representativeId ? parseInt(req.query.representativeId as string) : undefined;
-      const status = (req.query.status as string) || undefined;
-      const type = (req.query.type as string) || undefined;
-      const entityType = (req.query.entityType as string) || undefined;
-      const entityId = req.query.entityId ? parseInt(req.query.entityId as string) : undefined;
-      const dateFrom = (req.query.dateFrom as string) || undefined;
-      const dateTo = (req.query.dateTo as string) || undefined;
-      const sort = (req.query.sort as 'newest' | 'oldest') || 'newest';
-
-      const result = await storage.getFinancialTransactionsPaginated({
-        page: Number.isFinite(page) && page > 0 ? page : 1,
-        limit: Number.isFinite(limit) && limit > 0 ? limit : 30,
-        representativeId,
-        status,
-        type,
-        entityType,
-        entityId,
-        dateFrom,
-        dateTo,
-        sort
-      });
-
-      res.json(result);
+      const transactions = await storage.getFinancialTransactions();
+      res.json(transactions);
     } catch (error: any) {
       console.error('خطا در دریافت تراکنش‌های مالی:', error);
       res.status(500).json({ 
@@ -2591,26 +2533,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('خطا در دریافت نقض محدودیت‌ها:', error);
       res.status(500).json({ error: 'خطا در دریافت نقض محدودیت‌ها', details: error.message });
-    }
-  });
-
-  // Create a data integrity constraint (for testing negative scenarios)
-  app.post("/api/constraints", requireAuth, async (req, res) => {
-    try {
-      const { constraintType, entityType, entityId, constraintRule } = req.body || {};
-      if (!constraintType || !entityType || !entityId) {
-        return res.status(400).json({ error: "پارامترهای ضروری ناقص است" });
-      }
-      const created = await storage.createIntegrityConstraint({
-        constraintType,
-        entityType,
-        entityId: parseInt(entityId),
-        constraintRule: constraintRule || {}
-      });
-      res.json(created);
-    } catch (error: any) {
-      console.error('خطا در ایجاد محدودیت:', error);
-      res.status(500).json({ error: 'خطا در ایجاد محدودیت', details: error.message });
     }
   });
 

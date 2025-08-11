@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,22 +16,15 @@ import {
   Brain,
   TrendingUp
 } from 'lucide-react';
-import { crmFetch } from '@/lib/utils';
-import { useCrmManagerStatus } from '@/hooks/use-crm-manager-status';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function SystemConfiguration() {
   const { toast } = useToast();
-  const manager = useCrmManagerStatus(10000);
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [isTestingPerformance, setIsTestingPerformance] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<any>(null);
   const [performanceTestResult, setPerformanceTestResult] = useState<any>(null);
-  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
-  const [isApiKeyConfigured, setIsApiKeyConfigured] = useState(false);
-  const [apiKeyLast4, setApiKeyLast4] = useState<string | null>(null);
   
   // AI Behavior Settings
   const [aiBehaviorConfig, setAiBehaviorConfig] = useState({
@@ -54,18 +47,14 @@ export function SystemConfiguration() {
 
     setIsTestingApi(true);
     try {
-      const response = await crmFetch('/api/crm/settings/test-xai-api', {
+      const response = await fetch('/api/crm/settings/test-xai-api', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({ apiKey })
       });
-
-      if (response.status === 403) {
-        toast({ title: 'دسترسی مدیر منقضی شد', description: 'لطفاً مجدداً رمز مدیر CRM را وارد کنید', variant: 'destructive' });
-        try { window.dispatchEvent(new CustomEvent('crm-manager-locked', { detail: { source: 'test-xai-api' } })); } catch {}
-      }
 
       const result = await response.json();
       setApiTestResult(result);
@@ -117,7 +106,7 @@ export function SystemConfiguration() {
         }
       };
 
-  const response = await crmFetch('/api/crm/settings/test-ai-performance', {
+      const response = await fetch('/api/crm/settings/test-ai-performance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -129,12 +118,7 @@ export function SystemConfiguration() {
         })
       });
 
-      if (response.status === 403) {
-        toast({ title: 'دسترسی مدیر منقضی شد', description: 'لطفاً مجدداً رمز مدیر CRM را وارد کنید', variant: 'destructive' });
-        window.dispatchEvent(new CustomEvent('crm-manager-locked', { detail: { source: 'test-ai-performance' } }));
-      }
-
-  const result = await response.json();
+      const result = await response.json();
       setPerformanceTestResult(result);
 
       if (result.success) {
@@ -172,7 +156,7 @@ export function SystemConfiguration() {
     }
 
     try {
-  const response = await crmFetch('/api/crm/settings', {
+      const response = await fetch('/api/crm/settings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -186,11 +170,6 @@ export function SystemConfiguration() {
         })
       });
 
-      if (response.status === 403) {
-        toast({ title: 'دسترسی مدیر منقضی شد', description: 'لطفاً مجدداً رمز مدیر CRM را وارد کنید', variant: 'destructive' });
-        window.dispatchEvent(new CustomEvent('crm-manager-locked', { detail: { source: 'save-api-key' } }));
-      }
-
       const result = await response.json();
       
       if (result.success) {
@@ -198,10 +177,6 @@ export function SystemConfiguration() {
           title: "✅ ذخیره شد",
           description: "کلید API با موفقیت ذخیره شد"
         });
-        // Reflect saved state UI
-        setIsApiKeyConfigured(true);
-        if (apiKey.length >= 4) setApiKeyLast4(apiKey.slice(-4));
-        setApiKey('');
       } else {
         toast({
           title: "خطا",
@@ -221,7 +196,7 @@ export function SystemConfiguration() {
 
   const handleSaveBehaviorConfig = async () => {
     try {
-  const response = await crmFetch('/api/crm/settings', {
+      const response = await fetch('/api/crm/settings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -235,12 +210,7 @@ export function SystemConfiguration() {
         })
       });
 
-      if (response.status === 403) {
-        toast({ title: 'دسترسی مدیر منقضی شد', description: 'لطفاً مجدداً رمز مدیر CRM را وارد کنید', variant: 'destructive' });
-        window.dispatchEvent(new CustomEvent('crm-manager-locked', { detail: { source: 'save-behavior-config' } }));
-      }
-
-  const result = await response.json();
+      const result = await response.json();
       
       if (result.success) {
         toast({
@@ -264,64 +234,8 @@ export function SystemConfiguration() {
     }
   };
 
-  // Load existing settings (API key masked state and AI behavior config)
-  useEffect(() => {
-    let cancelled = false;
-    async function loadSettings() {
-      setIsLoadingSettings(true);
-      try {
-        // API Keys
-        const respKeys = await crmFetch('/api/crm/settings/API_KEYS');
-        if (respKeys.ok) {
-          const data = await respKeys.json();
-          const items = Array.isArray(data.data) ? data.data : [];
-          const xai = items.find((s: any) => s.key === 'XAI_GROK_API_KEY');
-          if (!cancelled && xai) {
-            setIsApiKeyConfigured(true);
-            const val = String(xai.value || '');
-            setApiKeyLast4(val.slice(-4));
-          }
-        }
-        // AI behavior
-        const respAi = await crmFetch('/api/crm/settings/AI_SETTINGS');
-        if (respAi.ok) {
-          const data2 = await respAi.json();
-          const items2 = Array.isArray(data2.data) ? data2.data : [];
-          const behavior = items2.find((s: any) => s.key === 'AI_BEHAVIOR_CONFIG');
-          if (!cancelled && behavior?.value) {
-            try {
-              const parsed = JSON.parse(behavior.value);
-              setAiBehaviorConfig((prev) => ({ ...prev, ...parsed }));
-            } catch {}
-          }
-        }
-      } catch {
-        // Silent; global handler shows lock modal on 403
-      } finally {
-        if (!cancelled) setIsLoadingSettings(false);
-      }
-    }
-    loadSettings();
-    return () => { cancelled = true; };
-  }, []);
-
   return (
     <div className="space-y-6">
-      {/* Manager lock banner */}
-      {!manager.unlocked && (
-        <Alert variant="destructive" className="bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-800">
-          <AlertDescription className="flex items-center justify-between">
-            <span>دسترسی مدیر منقضی شده است. برای ادامه، رمز مدیر CRM را وارد کنید.</span>
-            <Button
-              onClick={() => { try { window.dispatchEvent(new CustomEvent('crm-manager-locked', { detail: { source: 'system-config-banner' } })); } catch {} }}
-              className="bg-red-600 hover:bg-red-700 text-white"
-              size="sm"
-            >
-              ورود رمز مدیر
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
       {/* AI Behavior Configuration */}
       <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
         <CardHeader>
@@ -425,7 +339,6 @@ export function SystemConfiguration() {
             <Button 
               onClick={handleSaveBehaviorConfig}
               className="bg-indigo-600 hover:bg-indigo-700 text-white"
-              disabled={!manager.unlocked}
             >
               <Save className="w-4 h-4 ml-2" />
               ذخیره تنظیمات رفتار
@@ -456,14 +369,6 @@ export function SystemConfiguration() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               کلید API
             </label>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-              برای امنیت، کلید ذخیره‌شده نمایش داده نمی‌شود و فقط چهار رقم آخر آن قابل مشاهده است.
-            </p>
-            {isApiKeyConfigured && (
-              <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                کلید فعلی: ***{apiKeyLast4 || '****'} (محفوظ)
-              </div>
-            )}
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input
@@ -483,7 +388,7 @@ export function SystemConfiguration() {
               </div>
               <Button 
                 onClick={handleApiKeyTest} 
-                disabled={isTestingApi || !apiKey.trim() || !manager.unlocked}
+                disabled={isTestingApi || !apiKey.trim()}
                 variant="outline"
                 className="border-blue-300 text-blue-600 hover:bg-blue-50"
               >
@@ -546,7 +451,7 @@ export function SystemConfiguration() {
           <div className="flex gap-3">
             <Button 
               onClick={handleSaveApiKey}
-              disabled={!apiKey.trim() || !manager.unlocked}
+              disabled={!apiKey.trim()}
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               <Save className="w-4 h-4 ml-2" />
@@ -555,7 +460,7 @@ export function SystemConfiguration() {
             
             <Button 
               onClick={handlePerformanceTest} 
-              disabled={isTestingPerformance || !apiKey.trim() || !manager.unlocked}
+              disabled={isTestingPerformance || !apiKey.trim()}
               variant="outline"
               className="border-orange-300 text-orange-600 hover:bg-orange-50"
             >
@@ -572,28 +477,6 @@ export function SystemConfiguration() {
               )}
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Developer-only preview helper */}
-      <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-amber-100 dark:bg-amber-900 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-amber-600 dark:text-amber-300" />
-            </div>
-            <div>
-              <CardTitle className="text-lg text-gray-900 dark:text-white">
-                پیش‌نمایش تحلیل گزارش (Dev)
-              </CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-400">
-                شناسه گزارش را وارد کنید و تحلیل را بدون ذخیره مشاهده کنید.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <PreviewAnalysisWidget />
         </CardContent>
       </Card>
 
@@ -774,54 +657,6 @@ export function SystemConfiguration() {
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-// Developer helper widget to preview report analysis via API
-function PreviewAnalysisWidget() {
-  const { toast } = useToast();
-  const manager = useCrmManagerStatus(10000);
-  const [reportId, setReportId] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-
-  const runPreview = async () => {
-    if (!reportId.trim()) return;
-    setLoading(true);
-    try {
-      const resp = await crmFetch(`/api/crm/reports/${encodeURIComponent(reportId)}/analysis?preview=true`);
-      if (resp.status === 403) {
-        toast({ title: 'دسترسی مدیر منقضی شد', description: 'لطفاً مجدداً رمز مدیر CRM را وارد کنید', variant: 'destructive' });
-        window.dispatchEvent(new CustomEvent('crm-manager-locked', { detail: { source: 'preview-analysis' } }));
-      }
-      const data = await resp.json();
-      setResult(data);
-    } catch (e) {
-      toast({ title: 'خطا', description: 'خطا در دریافت پیش‌نمایش', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex gap-2 items-center">
-        <Input
-          placeholder="مثال: RPT-ABC123"
-          value={reportId}
-          onChange={(e) => setReportId(e.target.value)}
-          className="bg-gray-50 dark:bg-gray-900"
-        />
-        <Button onClick={runPreview} disabled={!manager.unlocked || !reportId.trim() || loading} variant="outline">
-          {loading ? 'در حال دریافت...' : 'پیش‌نمایش'}
-        </Button>
-      </div>
-      {result && (
-        <div className="text-xs bg-gray-50 dark:bg-gray-900 p-3 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-64">
-          <pre className="whitespace-pre-wrap text-gray-800 dark:text-gray-200">{JSON.stringify(result, null, 2)}</pre>
-        </div>
-      )}
     </div>
   );
 }

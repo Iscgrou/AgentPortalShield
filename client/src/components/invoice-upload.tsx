@@ -72,11 +72,6 @@ export default function InvoiceUpload() {
   const [invoiceDateMode, setInvoiceDateMode] = useState<'today' | 'custom'>('today');
   const [customInvoiceDate, setCustomInvoiceDate] = useState('');
   const [showDateSettings, setShowDateSettings] = useState(false);
-  // NEW: Calculation options states
-  const [showCalcSettings, setShowCalcSettings] = useState(false);
-  const [discountPercent, setDiscountPercent] = useState<string>('');
-  const [taxPercent, setTaxPercent] = useState<string>('');
-  const [rounding, setRounding] = useState<'nearest' | 'floor' | 'ceil'>('nearest');
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -153,18 +148,9 @@ export default function InvoiceUpload() {
       if (invoiceDateMode === 'custom' && customInvoiceDate) {
         formData.append('customInvoiceDate', customInvoiceDate);
       }
-      // Add calculation parameters
-      if (discountPercent.trim() !== '') {
-        formData.append('discountPercent', discountPercent.trim());
-      }
-      if (taxPercent.trim() !== '') {
-        formData.append('taxPercent', taxPercent.trim());
-      }
-      formData.append('rounding', rounding);
       
       console.log('Uploading file:', file.name, 'Size:', file.size);
       console.log('Invoice date mode:', invoiceDateMode, 'Custom date:', customInvoiceDate);
-  console.log('Calculation options:', { discountPercent, taxPercent, rounding });
       
       // شروع نمایش modal و شبیه‌سازی مراحل
       setIsProcessing(true);
@@ -416,96 +402,6 @@ export default function InvoiceUpload() {
                     </p>
                   </div>
                 )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Calculation Settings */}
-        <Card className="border-dashed border-gray-300 dark:border-gray-600">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-white flex items-center">
-                تنظیمات محاسبه مبلغ
-              </h3>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setShowCalcSettings(!showCalcSettings)}
-                className="text-xs"
-              >
-                {showCalcSettings ? 'بستن' : 'تنظیمات'}
-              </Button>
-            </div>
-
-            {showCalcSettings && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="discount" className="text-xs text-gray-600 dark:text-gray-400">
-                      درصد تخفیف (۰ تا ۱۰۰)
-                    </Label>
-                    <Input
-                      id="discount"
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.01}
-                      value={discountPercent}
-                      onChange={(e) => setDiscountPercent(e.target.value)}
-                      placeholder="مثال: 10"
-                      className="mt-1 text-sm"
-                      dir="ltr"
-                    />
-                    {discountPercent.trim() !== '' && (Number(discountPercent) < 0 || Number(discountPercent) > 100 || isNaN(Number(discountPercent))) && (
-                      <p className="text-xs text-orange-600 mt-1">مقدار نامعتبر</p>
-                    )}
-                  </div>
-                  <div>
-                    <Label htmlFor="tax" className="text-xs text-gray-600 dark:text-gray-400">
-                      درصد مالیات (۰ تا ۱۰۰)
-                    </Label>
-                    <Input
-                      id="tax"
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.01}
-                      value={taxPercent}
-                      onChange={(e) => setTaxPercent(e.target.value)}
-                      placeholder="مثال: 9"
-                      className="mt-1 text-sm"
-                      dir="ltr"
-                    />
-                    {taxPercent.trim() !== '' && (Number(taxPercent) < 0 || Number(taxPercent) > 100 || isNaN(Number(taxPercent))) && (
-                      <p className="text-xs text-orange-600 mt-1">مقدار نامعتبر</p>
-                    )}
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-600 dark:text-gray-400">
-                      روش گرد کردن
-                    </Label>
-                    <div className="mt-2">
-                      <RadioGroup value={rounding} onValueChange={(v: 'nearest' | 'floor' | 'ceil') => setRounding(v)} className="space-y-2">
-                        <div className="flex items-center space-x-2 space-x-reverse">
-                          <RadioGroupItem value="nearest" id="round-nearest" />
-                          <Label htmlFor="round-nearest" className="text-sm">نزدیک‌ترین</Label>
-                        </div>
-                        <div className="flex items-center space-x-2 space-x-reverse">
-                          <RadioGroupItem value="floor" id="round-floor" />
-                          <Label htmlFor="round-floor" className="text-sm">گرد به پایین</Label>
-                        </div>
-                        <div className="flex items-center space-x-2 space-x-reverse">
-                          <RadioGroupItem value="ceil" id="round-ceil" />
-                          <Label htmlFor="round-ceil" className="text-sm">گرد به بالا</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  نکته: ابتدا تخفیف اعمال می‌شود، سپس مالیات. نتیجه بر اساس روش انتخابی گرد می‌شود.
-                </p>
               </div>
             )}
           </CardContent>

@@ -12,8 +12,7 @@ import {
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import RepresentativeModal from './representative-modal';
-// CreateRepresentativeModal removed due to mirror-only policy
-import { crmFetch } from '@/lib/utils';
+import CreateRepresentativeModal from './create-representative-modal';
 
 // Types
 interface Representative {
@@ -67,7 +66,7 @@ export default function NewRepresentativesManager() {
   const [sortBy, setSortBy] = useState('name');
   const [selectedRep, setSelectedRep] = useState<Representative | null>(null);
   const [showModal, setShowModal] = useState(false);
-  // Mirror-only: creation flow is disabled in CRM
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   
   const { toast } = useToast();
@@ -93,7 +92,9 @@ export default function NewRepresentativesManager() {
         ...(statusFilter !== 'all' && { status: statusFilter }),
         ...(sortBy && { sortBy })
       });
-  return crmFetch(`/api/crm/representatives?${params}`).then(res => {
+      return fetch(`/api/crm/representatives?${params}`, {
+        credentials: 'include'
+      }).then(res => {
         if (!res.ok) throw new Error('خطا در دریافت اطلاعات نمایندگان');
         return res.json();
       });
@@ -109,18 +110,47 @@ export default function NewRepresentativesManager() {
   const representatives = (repsData as any)?.data || [];
   const pagination = (repsData as any)?.pagination || { page: 1, totalPages: 1, totalCount: 0 };
 
-  // Mirror-only policy: Disable create mutation in CRM
+  // Create representative mutation
   const createMutation = useMutation({
-    mutationFn: async (_data: any) => {
-      throw new Error('ایجاد نماینده از طریق CRM مجاز نیست. لطفاً از پنل ادمین استفاده کنید.');
-    }
+    mutationFn: (data: any) => apiRequest('/api/crm/representatives', {
+      method: 'POST',
+      data: data,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/crm/representatives'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/crm/representatives/statistics'] });
+      toast({ title: 'نماینده جدید با موفقیت ایجاد شد' });
+      setShowCreateModal(false);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'خطا در ایجاد نماینده', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    },
   });
 
-  // Mirror-only policy: Disable update mutation in CRM
+  // Update representative mutation
   const updateMutation = useMutation({
-    mutationFn: async (_: any) => {
-      throw new Error('ویرایش نماینده از طریق CRM مجاز نیست. لطفاً از پنل ادمین استفاده کنید.');
-    }
+    mutationFn: ({ id, ...data }: any) => apiRequest(`/api/crm/representatives/${id}`, {
+      method: 'PUT',
+      data: data,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/crm/representatives'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/crm/representatives/statistics'] });
+      toast({ title: 'اطلاعات نماینده بروزرسانی شد' });
+      setShowModal(false);
+      setSelectedRep(null);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'خطا در بروزرسانی', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    },
   });
 
   // Handle representative actions
@@ -143,9 +173,8 @@ export default function NewRepresentativesManager() {
 
   const handleEditRep = (rep: Representative) => {
     setSelectedRep(rep);
-    setIsEditing(false);
+    setIsEditing(true);
     setShowModal(true);
-    toast({ title: 'این بخش فقط خواندنی است', description: 'ویرایش نماینده از طریق CRM مجاز نیست', variant: 'destructive' });
   };
 
   const handleCallRep = (rep: Representative) => {
@@ -161,13 +190,13 @@ export default function NewRepresentativesManager() {
   };
 
   const handleCreateRep = (data: any) => {
-    // Mirror-only: show notice
-    toast({ title: 'ایجاد نماینده مجاز نیست', description: 'این عملیات فقط در پنل ادمین قابل انجام است', variant: 'destructive' });
+    createMutation.mutate(data);
   };
 
-  const handleUpdateRep = (_data: any) => {
-    // Mirror-only: show notice
-    toast({ title: 'ویرایش نماینده مجاز نیست', description: 'این عملیات فقط در پنل ادمین قابل انجام است', variant: 'destructive' });
+  const handleUpdateRep = (data: any) => {
+    if (selectedRep) {
+      updateMutation.mutate({ id: selectedRep.id, ...data });
+    }
   };
 
 
@@ -188,17 +217,13 @@ export default function NewRepresentativesManager() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-white">مدیریت نمایندگان</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => toast({ title: 'ایجاد نماینده غیرفعال است', description: 'برای ایجاد نماینده به پنل ادمین مراجعه کنید', variant: 'destructive' })}
-            className="bg-green-600/40 hover:bg-green-700/40 cursor-not-allowed"
-            disabled
-            title="سیاست فقط-آینه: ایجاد از CRM مجاز نیست"
-          >
-            <Plus className="w-4 h-4 ml-2" />
-            نماینده جدید
-          </Button>
-        </div>
+        <Button
+          onClick={() => setShowCreateModal(true)}
+          className="bg-green-600 hover:bg-green-700"
+        >
+          <Plus className="w-4 h-4 ml-2" />
+          نماینده جدید
+        </Button>
       </div>
 
       {/* Statistics Cards */}
@@ -410,9 +435,11 @@ export default function NewRepresentativesManager() {
           {/* Empty State */}
           {!repsLoading && !repsError && representatives.length === 0 && (
             <div className="flex justify-center items-center py-20">
-              <div className="text-center space-y-2">
-                <p className="text-gray-400">هیچ نماینده‌ای یافت نشد</p>
-                <p className="text-gray-500 text-sm">سیاست فقط-آینه: ایجاد نماینده از طریق CRM مجاز نیست. لطفاً از پنل ادمین استفاده کنید.</p>
+              <div className="text-center">
+                <p className="text-gray-400 mb-4">هیچ نماینده‌ای یافت نشد</p>
+                <Button onClick={() => setShowCreateModal(true)}>
+                  افزودن نماینده جدید
+                </Button>
               </div>
             </div>
           )}
@@ -466,11 +493,10 @@ export default function NewRepresentativesManager() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleEditRep(rep)}
-                        className="flex-1 opacity-60"
-                        title="سیاست فقط-آینه: ویرایش از CRM مجاز نیست"
+                        className="flex-1"
                       >
                         <Edit2 className="w-3 h-3 ml-1" />
-                        فقط نمایش
+                        ویرایش
                       </Button>
                       <Button
                         size="sm"
@@ -533,7 +559,14 @@ export default function NewRepresentativesManager() {
         />
       )}
 
-  {/* Mirror-only: create modal disabled in CRM */}
+      {showCreateModal && (
+        <CreateRepresentativeModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSave={handleCreateRep}
+          isLoading={createMutation.isPending}
+        />
+      )}
     </div>
   );
 }

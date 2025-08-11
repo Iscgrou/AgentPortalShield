@@ -8,7 +8,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { crmFetch } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Plus, 
@@ -96,9 +95,10 @@ export function ManagerWorkspace() {
   // Manual Task Creation Mutation
   const createTaskMutation = useMutation({
     mutationFn: (taskData: TaskCreationRequest) => 
-      crmFetch('/api/workspace/tasks', {
+      fetch('/api/workspace/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(taskData)
       }).then(res => res.json()),
     onSuccess: () => {
@@ -130,7 +130,7 @@ export function ManagerWorkspace() {
   // AI Task Generation Mutation  
   const generateAITasksMutation = useMutation({
     mutationFn: (requestData: AITaskGenerationRequest) => 
-      crmFetch('/api/workspace/tasks/generate', {
+      fetch('/api/workspace/tasks/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData)
@@ -156,7 +156,7 @@ export function ManagerWorkspace() {
   // Delete Task Mutation
   const deleteTaskMutation = useMutation({
     mutationFn: (taskId: string) => 
-      crmFetch(`/api/workspace/tasks/${taskId}`, { method: 'DELETE' }).then(res => res.json()),
+      fetch(`/api/workspace/tasks/${taskId}`, { method: 'DELETE' }).then(res => res.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspace/tasks'] });
       queryClient.invalidateQueries({ queryKey: ['/api/workspace/stats'] });
@@ -486,19 +486,9 @@ export function ManagerWorkspace() {
                               AI
                             </Badge>
                           )}
-                          {(() => {
-                            const map: Record<string, string> = {
-                              HIGH: priorityColors.HIGH,
-                              MEDIUM: priorityColors.MEDIUM,
-                              LOW: priorityColors.LOW,
-                            };
-                            const cls = map[String(task.priority)] || priorityColors.MEDIUM;
-                            return (
-                              <Badge className={`text-xs ${cls}`}>
-                                {task.priority === 'HIGH' ? 'بالا' : task.priority === 'MEDIUM' ? 'متوسط' : 'پایین'}
-                              </Badge>
-                            );
-                          })()}
+                          <Badge className={`text-xs ${priorityColors[task.priority]}`}>
+                            {task.priority === 'HIGH' ? 'بالا' : task.priority === 'MEDIUM' ? 'متوسط' : 'پایین'}
+                          </Badge>
                         </div>
                         <p className="text-xs text-gray-400 mt-1">مسئول: {task.assignedTo}</p>
                         <p className="text-xs text-gray-500 mt-1">{task.description}</p>

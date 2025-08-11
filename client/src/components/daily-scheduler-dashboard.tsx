@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Calendar, Clock, Users, TrendingUp, AlertTriangle, CheckCircle, Timer, User } from 'lucide-react';
-import { crmFetch } from '@/lib/utils';
 
 interface ScheduleEntry {
   id: string;
@@ -67,7 +66,7 @@ export function DailySchedulerDashboard() {
     message: string;
   }>({
     queryKey: ['/api/crm/scheduler/daily', selectedDate],
-    queryFn: () => crmFetch(`/api/crm/scheduler/daily?date=${selectedDate}`).then(res => res.json()),
+    queryFn: () => fetch(`/api/crm/scheduler/daily?date=${selectedDate}`).then(res => res.json()),
   });
 
   // Team Workload Query

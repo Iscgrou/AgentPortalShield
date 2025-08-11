@@ -48,18 +48,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, toPersianDigits, isOverdue } from "@/lib/persian-date";
-
-// Lightweight API contract for invoice statistics to satisfy TS without changing runtime
-interface InvoiceStats {
-  totalInvoices: number;
-  unpaidCount: number;
-  paidCount: number;
-  partialCount: number;
-  overdueCount: number;
-  totalAmount: number;
-  sentToTelegramCount?: number;
-  unsentToTelegramCount?: number;
-}
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface Invoice {
@@ -159,7 +147,7 @@ export default function Invoices() {
   const totalCount = pagination?.totalCount || filteredInvoices.length;
   
   // SHERLOCK v12.2: Fetch total statistics for widgets (not just current page)
-  const { data: totalStats } = useQuery<InvoiceStats>({
+  const { data: totalStats } = useQuery({
     queryKey: ["/api/invoices/statistics"],
     enabled: true
   });
@@ -241,15 +229,15 @@ export default function Invoices() {
 
   // SHERLOCK v12.2: Use total statistics for widgets, not just current page  
   const stats = totalStats ? {
-    total: totalStats?.totalInvoices ?? 0,
-    unpaid: totalStats?.unpaidCount ?? 0,
-    paid: totalStats?.paidCount ?? 0,
-    partial: totalStats?.partialCount ?? 0,
-    overdue: totalStats?.overdueCount ?? 0,
-    totalAmount: totalStats?.totalAmount ?? 0,
+    total: totalStats.totalInvoices || 0,
+    unpaid: totalStats.unpaidCount || 0,
+    paid: totalStats.paidCount || 0,
+    partial: totalStats.partialCount || 0,
+    overdue: totalStats.overdueCount || 0,
+    totalAmount: totalStats.totalAmount || 0,
     // SHERLOCK v12.2: Use total telegram stats from API
-    sentToTelegram: totalStats?.sentToTelegramCount ?? 0,
-    unsentToTelegram: totalStats?.unsentToTelegramCount ?? 0
+    sentToTelegram: totalStats.sentToTelegramCount || 0,
+    unsentToTelegram: totalStats.unsentToTelegramCount || 0
   } : {
     total: filteredInvoices.length,
     unpaid: filteredInvoices.filter((inv: Invoice) => inv.status === 'unpaid').length,

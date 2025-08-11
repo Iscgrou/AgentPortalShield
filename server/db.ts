@@ -1,8 +1,12 @@
-import { Pool } from 'pg';
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-serverless';
+import ws from "ws";
 import * as schema from "@shared/schema";
 
-// Configure for local PostgreSQL
+// Configure Neon for serverless environment with enhanced error handling
+neonConfig.webSocketConstructor = ws;
+neonConfig.useSecureWebSocket = true;
+neonConfig.pipelineConnect = false;
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -20,7 +24,11 @@ export const pool = new Pool({
 });
 
 // Enhanced database instance with better error handling and performance monitoring
-export const db = drizzle(pool, { schema });
+export const db = drizzle({ 
+  client: pool, 
+  schema,
+  logger: process.env.NODE_ENV === 'development' 
+});
 
 // Performance monitoring for slow queries
 export function logSlowQuery(queryName: string, duration: number) {

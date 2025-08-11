@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { crmFetch } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -39,7 +38,7 @@ export function ReportForm({ onClose, onSuccess }: ReportFormProps) {
         submittedBy: 'کاربر CRM' // In real app, get from auth context
       };
 
-  const response = await crmFetch('/api/workspace/reports', {
+      const response = await fetch('/api/workspace/reports', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

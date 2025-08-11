@@ -13,7 +13,7 @@ import {
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 // @ts-ignore
-import { nowPersian } from "../lib/persian-time";
+import * as persianDate from "persian-date";
 import { xaiGrokEngine } from "./xai-grok-engine";
 
 export interface FollowUpSuggestion {
@@ -171,7 +171,7 @@ export class FollowUpManager {
    */
   async getTodayReminders(staffId: number): Promise<WorkspaceAiReminder[]> {
     try {
-  const today = nowPersian('YYYY-MM-DD');
+      const today = new (persianDate as any)().format('YYYY-MM-DD');
       
       return await db.select().from(workspaceAiReminders)
         .where(and(
@@ -191,7 +191,7 @@ export class FollowUpManager {
    */
   async getReminderStats(staffId: number): Promise<ReminderStats> {
     try {
-  const today = nowPersian('YYYY-MM-DD');
+      const today = new (persianDate as any)().format('YYYY-MM-DD');
       
       const stats = await db.execute(sql`
         SELECT 

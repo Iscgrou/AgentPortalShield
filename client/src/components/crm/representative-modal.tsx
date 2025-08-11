@@ -128,7 +128,7 @@ export default function RepresentativeModal({
           </div>
         </DialogHeader>
 
-  <Tabs defaultValue={"overview"} className="w-full">
+        <Tabs defaultValue={isEditing ? "edit" : "overview"} className="w-full">
           <TabsList className="grid w-full grid-cols-4 bg-black/30">
             <TabsTrigger value="overview" className="data-[state=active]:bg-white/20">
               <Activity className="w-4 h-4 ml-2" />
@@ -142,6 +142,12 @@ export default function RepresentativeModal({
               <FileText className="w-4 h-4 ml-2" />
               فعالیت‌ها
             </TabsTrigger>
+            {isEditing && (
+              <TabsTrigger value="edit" className="data-[state=active]:bg-white/20">
+                <Save className="w-4 h-4 ml-2" />
+                ویرایش
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -379,7 +385,94 @@ export default function RepresentativeModal({
             </Card>
           </TabsContent>
 
-          {/* Mirror-only policy: edit disabled in CRM */}
+          {isEditing && (
+            <TabsContent value="edit" className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <Card className="bg-black/20 border-white/10">
+                  <CardHeader>
+                    <CardTitle className="text-white">ویرایش اطلاعات نماینده</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="name" className="text-white">نام نماینده *</Label>
+                        <Input
+                          id="name"
+                          value={formData.name}
+                          onChange={(e) => handleInputChange('name', e.target.value)}
+                          className="bg-white/10 border-white/20 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="code" className="text-white">کد نماینده *</Label>
+                        <Input
+                          id="code"
+                          value={formData.code}
+                          onChange={(e) => handleInputChange('code', e.target.value)}
+                          className="bg-white/10 border-white/20 text-white"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="ownerName" className="text-white">نام مالک</Label>
+                        <Input
+                          id="ownerName"
+                          value={formData.ownerName}
+                          onChange={(e) => handleInputChange('ownerName', e.target.value)}
+                          className="bg-white/10 border-white/20 text-white"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="phone" className="text-white">شماره تماس</Label>
+                        <Input
+                          id="phone"
+                          value={formData.phone}
+                          onChange={(e) => handleInputChange('phone', e.target.value)}
+                          className="bg-white/10 border-white/20 text-white"
+                          placeholder="09xxxxxxxxx"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="panelUsername" className="text-white">نام کاربری پنل</Label>
+                        <Input
+                          id="panelUsername"
+                          value={formData.panelUsername}
+                          onChange={(e) => handleInputChange('panelUsername', e.target.value)}
+                          className="bg-white/10 border-white/20 text-white"
+                        />
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="isActive"
+                          checked={formData.isActive}
+                          onChange={(e) => handleInputChange('isActive', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded"
+                        />
+                        <Label htmlFor="isActive" className="text-white">فعال</Label>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="flex gap-2 justify-end">
+                  <Button type="button" variant="outline" onClick={onClose}>
+                    <X className="w-4 h-4 ml-2" />
+                    انصراف
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    className="bg-blue-600 hover:bg-blue-700"
+                    disabled={isLoading}
+                  >
+                    <Save className="w-4 h-4 ml-2" />
+                    {isLoading ? 'در حال ذخیره...' : 'ذخیره تغییرات'}
+                  </Button>
+                </div>
+              </form>
+            </TabsContent>
+          )}
         </Tabs>
       </DialogContent>
     </Dialog>

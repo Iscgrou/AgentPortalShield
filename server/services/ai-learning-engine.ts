@@ -240,7 +240,7 @@ export class AILearningEngine {
     const invoicesByRep = this.groupBy(invoices, 'representativeId');
     const paymentsByRep = this.groupBy(payments, 'representativeId');
 
-  for (const repId of new Set<string>([...Object.keys(invoicesByRep), ...Object.keys(paymentsByRep)])) {
+    for (const repId of new Set([...Object.keys(invoicesByRep), ...Object.keys(paymentsByRep)])) {
       const repInvoices = invoicesByRep[repId] || [];
       const repPayments = paymentsByRep[repId] || [];
 
@@ -651,13 +651,13 @@ export class AILearningEngine {
     await db.insert(aiKnowledgeBase).values({
       knowledgeId: `LEARNING-${Date.now()}-${nanoid(6)}`,
       title: 'AI Learning Cycle Results',
-      description: 'Aggregated outcomes from automated learning cycle',
       category: 'LEARNING_RESULTS',
+      content: JSON.stringify(results),
+      confidence: 85,
       sourceType: 'AUTOMATED_LEARNING',
       culturalContext: 'PERSIAN_BUSINESS',
-      confidenceLevel: 85,
-      tags: [],
-      relatedKnowledge: []
+      lastValidated: new Date(),
+      createdAt: new Date()
     });
   }
 

@@ -487,7 +487,7 @@ export default function SalesPartners() {
               <CardContent className="p-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                    {formatCurrency(parseFloat((stats as any)?.totalCoupledSales || "0"))}
+                    {formatCurrency(parseFloat(stats?.totalCoupledSales || "0"))}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">کل فروش کوپل شده</div>
                 </div>

@@ -101,7 +101,7 @@ export class RealTimeSyncEngine {
         details: `همگام‌سازی موفق: ${affectedTasks.length} وظیفه تأثیرپذیر، ${appliedAdjustments.length} تنظیم اعمال شد`
       };
 
-  } catch (error: any) {
+    } catch (error) {
       console.error('خطا در همگام‌سازی مالی:', error);
       return {
         success: false,
@@ -109,7 +109,7 @@ export class RealTimeSyncEngine {
         workflowAdjustments: [],
         aiRecommendations: [],
         syncLatency: Date.now() - startTime,
-  details: `خطا: ${error?.message || 'unknown error'}`
+        details: `خطا: ${error.message}`
       };
     }
   }
@@ -131,7 +131,7 @@ export class RealTimeSyncEngine {
     const changeAmount = event.changeAmount;
 
     // تحلیل شدت تأثیر
-  const impactSeverity = this.calculateImpactSeverity(currentDebt, changeAmount, event.type);
+    const impactSeverity = this.calculateImpactSeverity(currentDebt, changeAmount, event.type);
     
     // تحلیل اولویت
     const priorityChange = this.calculatePriorityChange(currentDebt, changeAmount, event.type);
@@ -291,8 +291,8 @@ export class RealTimeSyncEngine {
   }
 
   private calculateNewPriority(currentPriority: string, changeType: string): string {
-    const priorityMap: Record<string, number> = { 'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'URGENT': 4 };
-    const reversePriorityMap: Record<number, string> = { 1: 'LOW', 2: 'MEDIUM', 3: 'HIGH', 4: 'URGENT' };
+    const priorityMap = { 'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'URGENT': 4 };
+    const reversePriorityMap = { 1: 'LOW', 2: 'MEDIUM', 3: 'HIGH', 4: 'URGENT' };
     
     let currentLevel = priorityMap[currentPriority] || 2;
 
@@ -377,12 +377,12 @@ export class RealTimeSyncEngine {
             reason: 'نیاز به بررسی دستی'
           });
         }
-    } catch (error) {
+      } catch (error) {
         console.error(`خطا در اعمال تنظیم ${adjustment.type}:`, error);
         appliedAdjustments.push({
           ...adjustment,
           status: 'FAILED',
-      error: (error as any)?.message ?? String(error)
+          error: error.message
         });
       }
     }
@@ -526,15 +526,14 @@ export class RealTimeSyncEngine {
    * دریافت آمار عملکرد همگام‌سازی
    */
   getSyncMetrics(): any {
-    const metrics: Record<string, any> = {};
-  for (const [eventType, data] of this.syncMetrics.entries()) {
+    const metrics = {};
+    for (const [eventType, data] of this.syncMetrics.entries()) {
       metrics[eventType] = data;
     }
-    const values = Array.from(this.syncMetrics.values());
     return {
       metrics,
-      totalEvents: values.reduce((sum: number, data: any) => sum + (data.totalSyncs || 0), 0),
-      overallLatency: (values.reduce((sum: number, data: any) => sum + (data.averageLatency || 0), 0) / (this.syncMetrics.size || 1)) || 0
+      totalEvents: Array.from(this.syncMetrics.values()).reduce((sum, data) => sum + data.totalSyncs, 0),
+      overallLatency: Array.from(this.syncMetrics.values()).reduce((sum, data) => sum + data.averageLatency, 0) / this.syncMetrics.size || 0
     };
   }
 

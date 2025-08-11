@@ -1,5 +1,4 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { crmFetch } from "@/lib/utils";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -17,7 +16,7 @@ export async function apiRequest(
   },
 ): Promise<any> {
   const method = options?.method || 'GET';
-  const res = await crmFetch(url, {
+  const res = await fetch(url, {
     method,
     headers: options?.data ? { "Content-Type": "application/json" } : {},
     body: options?.data ? JSON.stringify(options.data) : undefined,
@@ -56,7 +55,9 @@ export const getQueryFn: <T>(options: {
     
     console.log('SHERLOCK v12.1: Fetching URL:', url);
     
-  const res = await crmFetch(url, { credentials: "include" });
+    const res = await fetch(url, {
+      credentials: "include",
+    });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;

@@ -68,8 +68,6 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { MobileTable, TouchButton, MobileDrawer, PullToRefresh } from "@/components/mobile/mobile-components";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 // SHERLOCK v11.0: Updated interface with standardized terminology
 interface Representative {
@@ -155,11 +153,6 @@ export default function Representatives() {
   const [sortBy, setSortBy] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const itemsPerPage = 30;
-  
-  // Mobile state management
-  const isMobile = useIsMobile();
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -620,170 +613,104 @@ export default function Representatives() {
 
       {/* Representatives Table */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader>
           <CardTitle>فهرست نمایندگان</CardTitle>
-          {isMobile && (
-            <TouchButton
-              variant="secondary"
-              size="sm"
-              onClick={() => setMobileFiltersOpen(true)}
-            >
-              <Filter className="w-4 h-4" />
-            </TouchButton>
-          )}
         </CardHeader>
         <CardContent>
-          <PullToRefresh onRefresh={async () => {
-            await queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-          }}>
-            {isMobile ? (
-              <MobileTable
-                data={paginatedRepresentatives}
-                columns={[
-                  { key: 'code', header: 'کد' },
-                  { key: 'name', header: 'نام فروشگاه' },
-                  { key: 'ownerName', header: 'مالک', render: (value) => value || '-' },
-                  { 
-                    key: 'isActive', 
-                    header: 'وضعیت',
-                    render: (value) => getStatusBadge(value)
-                  },
-                  { 
-                    key: 'totalSales', 
-                    header: 'کل فروش',
-                    render: (value) => formatCurrency(parseFloat(value))
-                  },
-                  { 
-                    key: 'totalDebt', 
-                    header: 'بدهی',
-                    render: (value) => (
-                      <span className={parseFloat(value) > 1000000 ? "text-red-600 dark:text-red-400 font-semibold" : parseFloat(value) > 500000 ? "text-orange-600 dark:text-orange-400 font-semibold" : ""}>
-                        {formatCurrency(parseFloat(value))}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                    onClick={() => handleSort('code')}
+                  >
+                    کد {getSortIcon('code')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                    onClick={() => handleSort('name')}
+                  >
+                    نام فروشگاه {getSortIcon('name')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                    onClick={() => handleSort('ownerName')}
+                  >
+                    مالک {getSortIcon('ownerName')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                    onClick={() => handleSort('isActive')}
+                  >
+                    وضعیت {getSortIcon('isActive')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                    onClick={() => handleSort('totalSales')}
+                  >
+                    کل فروش {getSortIcon('totalSales')}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                    onClick={() => handleSort('totalDebt')}
+                  >
+                    بدهی {getSortIcon('totalDebt')}
+                  </TableHead>
+                  <TableHead>عملیات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedRepresentatives.map((rep) => (
+                  <TableRow 
+                    key={rep.id} 
+                    className={`${getDebtAlert(rep.totalDebt)} hover:bg-gray-50 dark:hover:bg-gray-800`}
+                  >
+                    <TableCell className="font-mono text-sm">
+                      {rep.code}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {rep.name}
+                    </TableCell>
+                    <TableCell>
+                      {rep.ownerName || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(rep.isActive)}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {formatCurrency(parseFloat(rep.totalSales))}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      <span className={parseFloat(rep.totalDebt) > 1000000 ? "text-red-600 dark:text-red-400 font-semibold" : parseFloat(rep.totalDebt) > 500000 ? "text-orange-600 dark:text-orange-400 font-semibold" : ""}>
+                        {formatCurrency(parseFloat(rep.totalDebt))}
                       </span>
-                    )
-                  },
-                  {
-                    key: 'actions',
-                    header: 'عملیات',
-                    render: (_, row) => (
+                    </TableCell>
+                    <TableCell>
                       <div className="flex gap-2">
-                        <TouchButton
-                          variant="secondary"
+                        <Button
+                          variant="ghost"
                           size="sm"
-                          onClick={() => {
-                            handleViewDetails(row as unknown as Representative);
-                            setMobileDetailsOpen(true);
-                          }}
+                          onClick={() => handleViewDetails(rep)}
                         >
                           <Eye className="w-4 h-4" />
-                        </TouchButton>
-                        <TouchButton
-                          variant="secondary"  
+                        </Button>
+                        <Button
+                          variant="ghost"
                           size="sm"
-                          onClick={() => handleEdit(row as unknown as Representative)}
+                          onClick={() => handleEdit(rep)}
                         >
                           <Edit className="w-4 h-4" />
-                        </TouchButton>
+                        </Button>
                       </div>
-                    )
-                  }
-                ]}
-              />
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort('code')}
-                      >
-                        کد {getSortIcon('code')}
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort('name')}
-                      >
-                        نام فروشگاه {getSortIcon('name')}
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort('ownerName')}
-                      >
-                        مالک {getSortIcon('ownerName')}
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort('isActive')}
-                      >
-                        وضعیت {getSortIcon('isActive')}
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort('totalSales')}
-                      >
-                        کل فروش {getSortIcon('totalSales')}
-                      </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort('totalDebt')}
-                      >
-                        بدهی {getSortIcon('totalDebt')}
-                      </TableHead>
-                      <TableHead>عملیات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedRepresentatives.map((rep) => (
-                      <TableRow 
-                        key={rep.id} 
-                        className={`${getDebtAlert(rep.totalDebt)} hover:bg-gray-50 dark:hover:bg-gray-800`}
-                      >
-                        <TableCell className="font-mono text-sm">
-                          {rep.code}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {rep.name}
-                        </TableCell>
-                        <TableCell>
-                          {rep.ownerName || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(rep.isActive)}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {formatCurrency(parseFloat(rep.totalSales))}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          <span className={parseFloat(rep.totalDebt) > 1000000 ? "text-red-600 dark:text-red-400 font-semibold" : parseFloat(rep.totalDebt) > 500000 ? "text-orange-600 dark:text-orange-400 font-semibold" : ""}>
-                            {formatCurrency(parseFloat(rep.totalDebt))}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewDetails(rep)}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(rep)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </PullToRefresh>          {/* Pagination */}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          
+          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-2 mt-4">
               <Button
@@ -1412,109 +1339,6 @@ export default function Representatives() {
           }}
         />
       )}
-
-      {/* Mobile Filters Drawer */}
-      <MobileDrawer
-        isOpen={mobileFiltersOpen}
-        onClose={() => setMobileFiltersOpen(false)}
-        title="فیلترها"
-      >
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              جستجو
-            </label>
-            <Input
-              placeholder="جستجو در نام، کد یا مالک..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              وضعیت
-            </label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="انتخاب وضعیت" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">همه</SelectItem>
-                <SelectItem value="active">فعال</SelectItem>
-                <SelectItem value="inactive">غیرفعال</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <TouchButton
-            onClick={() => setMobileFiltersOpen(false)}
-            className="w-full"
-          >
-            اعمال فیلترها
-          </TouchButton>
-        </div>
-      </MobileDrawer>
-
-      {/* Mobile Details Drawer */}
-      <MobileDrawer
-        isOpen={mobileDetailsOpen}
-        onClose={() => setMobileDetailsOpen(false)}
-        title="جزئیات نماینده"
-      >
-        {selectedRep && (
-          <div className="p-6 space-y-6">
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-              <h3 className="font-semibold text-lg mb-2">{selectedRep.name}</h3>
-              <p className="text-gray-600 dark:text-gray-400">کد: {selectedRep.code}</p>
-              <p className="text-gray-600 dark:text-gray-400">مالک: {selectedRep.ownerName || '-'}</p>
-              <div className="mt-2">
-                {getStatusBadge(selectedRep.isActive)}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                <p className="text-sm text-blue-600 dark:text-blue-400">کل فروش</p>
-                <p className="font-semibold text-blue-800 dark:text-blue-300">
-                  {formatCurrency(parseFloat(selectedRep.totalSales))}
-                </p>
-              </div>
-              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
-                <p className="text-sm text-orange-600 dark:text-orange-400">بدهی</p>
-                <p className="font-semibold text-orange-800 dark:text-orange-300">
-                  {formatCurrency(parseFloat(selectedRep.totalDebt))}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <TouchButton
-                onClick={() => {
-                  setMobileDetailsOpen(false);
-                  handleEdit(selectedRep);
-                }}
-                className="flex-1"
-              >
-                <Edit className="w-4 h-4 ml-2" />
-                ویرایش
-              </TouchButton>
-              <TouchButton
-                variant="secondary"
-                onClick={() => {
-                  setMobileDetailsOpen(false);
-                  setIsDetailsOpen(true);
-                }}
-                className="flex-1"
-              >
-                <Eye className="w-4 h-4 ml-2" />
-                جزئیات کامل
-              </TouchButton>
-            </div>
-          </div>
-        )}
-      </MobileDrawer>
     </div>
   );
 }

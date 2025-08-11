@@ -196,7 +196,10 @@ export class SettingsStorage {
     }
   }
 
-  // getOfferIncentives is provided above as an alias to getOffers
+  // Add getOfferIncentives method as alias
+  async getOfferIncentives(): Promise<OfferIncentive[]> {
+    return this.getOffers();
+  }
 
   async createOffer(offer: InsertOfferIncentive): Promise<OfferIncentive> {
     try {

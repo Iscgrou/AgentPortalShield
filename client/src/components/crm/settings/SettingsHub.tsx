@@ -13,11 +13,8 @@ import {
   Shield,
   Database,
   Zap,
-  UserCog,
-  RefreshCw
+  UserCog
 } from 'lucide-react';
-import { useCrmManagerStatus } from '@/hooks/use-crm-manager-status';
-import { useToast } from '@/hooks/use-toast';
 
 // Import sub-components
 import { ManagerWorkspace } from './ManagerWorkspace.tsx';
@@ -34,15 +31,6 @@ interface SettingsHubProps {
 
 export function SettingsHub({ userRole = 'CRM_MANAGER', permissions = [] }: SettingsHubProps) {
   const [activeTab, setActiveTab] = useState('manager-workspace');
-  const manager = useCrmManagerStatus(10000);
-  const { toast } = useToast();
-
-  const handleQuickReUnlock = () => {
-    // Fire event to open unlock modal from dashboard level
-    try {
-      window.dispatchEvent(new CustomEvent('crm-manager-locked', { detail: { source: 'quick-relock-button' } }));
-    } catch {}
-  };
 
   const settingsSections = [
     {
@@ -118,42 +106,18 @@ export function SettingsHub({ userRole = 'CRM_MANAGER', permissions = [] }: Sett
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                <Settings className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                  🔧 تنظیمات سیستم
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  مدیریت جامع تنظیمات و پیکربندی‌های DA VINCI v1.0
-                </p>
-              </div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center justify-center w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg">
+              <Settings className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
-            
-            {/* Manager session status and quick relock */}
-            {manager.unlocked && (
-              <div className="flex items-center gap-2">
-                <div className={`px-3 py-2 rounded-lg text-sm ${
-                  manager.isExpiringWarning 
-                    ? 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 border border-orange-300 dark:border-orange-700' 
-                    : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border border-green-300 dark:border-green-700'
-                }`}>
-                  ⏱️ دسترسی مدیر: {manager.formatted}
-                </div>
-                <Button
-                  onClick={handleQuickReUnlock}
-                  size="sm"
-                  variant="outline"
-                  className="h-10"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  تمدید
-                </Button>
-              </div>
-            )}
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                🔧 تنظیمات سیستم
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                مدیریت جامع تنظیمات و پیکربندی‌های DA VINCI v1.0
+              </p>
+            </div>
           </div>
 
           {/* Quick Stats */}
