@@ -1015,27 +1015,31 @@ export class DatabaseStorage implements IStorage {
 
   async getDashboardData() {
     return await withDatabaseRetry(async () => {
-      // SHERLOCK v10.0 FIX: Total Revenue = Sum of all payments made to representatives
+      // SHERLOCK v17.8 FINANCIAL INTEGRITY: Use standardized calculations
+      const { financialIntegrityEngine } = await import("./services/financial-integrity-engine");
+      
+      // Calculate standardized total revenue = Sum of ALLOCATED payments only
       const [totalRevenueResult] = await db
         .select({ 
-          totalRevenue: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
+          totalRevenue: sql<string>`COALESCE(SUM(CASE WHEN is_allocated = true THEN CAST(amount as DECIMAL) ELSE 0 END), 0)` 
         })
         .from(payments);
 
-      // SHERLOCK v10.0 FIX: Remaining Debt = Total invoice amount - Total payments for each representative
+      // SHERLOCK v17.8 INTEGRITY: Standardized debt calculation = unpaid/overdue invoices - allocated payments
       const remainingDebtQuery = await db
         .select({
           representativeId: representatives.id,
           totalInvoices: sql<string>`COALESCE(SUM(CAST(invoices.amount as DECIMAL)), 0)`,
-          totalPayments: sql<string>`COALESCE(SUM(CAST(payments.amount as DECIMAL)), 0)`,
-          remainingDebt: sql<string>`COALESCE(SUM(CAST(invoices.amount as DECIMAL)), 0) - COALESCE(SUM(CAST(payments.amount as DECIMAL)), 0)`
+          unpaidInvoices: sql<string>`COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0)`,
+          allocatedPayments: sql<string>`COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0)`,
+          remainingDebt: sql<string>`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0))`
         })
         .from(representatives)
         .leftJoin(invoices, eq(representatives.id, invoices.representativeId))
         .leftJoin(payments, eq(representatives.id, payments.representativeId))
         .groupBy(representatives.id);
 
-      // Calculate total remaining debt (only positive debts)
+      // Calculate total remaining debt using INTEGRITY ENGINE standard (only positive debts)
       const totalRemainingDebt = remainingDebtQuery
         .reduce((sum, rep) => {
           const debt = parseFloat(rep.remainingDebt) || 0;
@@ -2550,7 +2554,7 @@ export class DatabaseStorage implements IStorage {
               ilike(invoices.invoiceNumber, `%${options.search}%`),
               ilike(representatives.name, `%${options.search}%`),
               ilike(representatives.code, `%${options.search}%`)
-            )
+            )!
           );
         }
 

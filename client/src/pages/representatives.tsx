@@ -870,9 +870,15 @@ export default function Representatives() {
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">کل پرداخت‌ها:</span>
+                      <span className="text-gray-600 dark:text-gray-400">پرداخت‌های تخصیص‌یافته:</span>
                       <span className="font-bold text-blue-600 dark:text-blue-400">
-                        {formatCurrency(selectedRep.payments?.reduce((sum, payment) => sum + parseFloat(payment.amount), 0) || parseFloat(selectedRep.credit || "0"))}
+                        {formatCurrency(selectedRep.payments?.reduce((sum, payment) => payment.isAllocated ? sum + parseFloat(payment.amount) : sum, 0) || 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">اعتبار (تخصیص‌نیافته):</span>
+                      <span className="font-bold text-green-600 dark:text-green-400">
+                        {formatCurrency(parseFloat(selectedRep.credit || "0"))}
                       </span>
                     </div>
                     <Separator />
@@ -1074,9 +1080,9 @@ export default function Representatives() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="text-center p-4 bg-green-50 dark:bg-green-950 rounded-lg">
-                      <div className="text-sm text-gray-600 dark:text-gray-400">کل پرداخت‌ها</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">پرداخت‌های تخصیص‌یافته</div>
                       <div className="text-xl font-bold text-green-600 dark:text-green-400">
-                        {formatCurrency(selectedRep.payments?.reduce((sum, payment) => sum + parseFloat(payment.amount), 0) || 0)}
+                        {formatCurrency(selectedRep.payments?.reduce((sum, payment) => payment.isAllocated ? sum + parseFloat(payment.amount) : sum, 0) || 0)}
                       </div>
                     </div>
                     <div className="text-center p-4 bg-red-50 dark:bg-red-950 rounded-lg">
