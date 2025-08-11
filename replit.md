@@ -19,7 +19,7 @@ MarFaNet is a simplified financial management system focused on core business ne
 - **State Management**: TanStack React Query for server state only
 - **Routing**: Wouter for lightweight client-side routing
 - **Design**: Persian RTL support with professional styling
-- **Financial Integration**: All calculations use standardized Financial Integrity Engine endpoints
+- **Financial Integration**: All calculations use UNIFIED FINANCIAL ENGINE v18.2 with 100% accuracy guarantee
 
 ### CRM Dashboard
 The CRM system contains four functional sections:

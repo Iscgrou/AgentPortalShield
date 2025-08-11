@@ -105,9 +105,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
   app.use("/api/unified-statistics", unifiedStatisticsRoutes);
   
-  // SHERLOCK v18.1: موتور مالی واقعی
-  const trueFinancialRoutes = (await import('./routes/true-financial-routes.js')).default;
-  app.use('/api/true-financial', trueFinancialRoutes);
+  // SHERLOCK v18.2: سیستم مالی یکپارچه - جایگزین همه سیستم‌های موازی
+  const unifiedFinancialRoutes = (await import('./routes/unified-financial-routes.js')).default;
+  app.use('/api/unified-financial', unifiedFinancialRoutes);
   
   // Direct test route to verify workspace functionality
   app.get("/api/workspace-direct-test", async (req, res) => {
@@ -220,55 +220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Legacy backward compatibility endpoint
-  app.post("/api/login", async (req, res) => {
-    try {
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({ error: "نام کاربری و رمز عبور الزامی است" });
-      }
-
-      // Get admin user from database
-      const adminUser = await storage.getAdminUser(username);
-      
-      if (!adminUser || !adminUser.isActive) {
-        return res.status(401).json({ error: "نام کاربری یا رمز عبور اشتباه است" });
-      }
-
-      // Verify password
-      const isPasswordValid = await bcrypt.compare(password, adminUser.passwordHash);
-      
-      if (!isPasswordValid) {
-        return res.status(401).json({ error: "نام کاربری یا رمز عبور اشتباه است" });
-      }
-
-      // Update last login time
-      await storage.updateAdminUserLogin(adminUser.id);
-
-      // Set session
-      (req.session as any).authenticated = true;
-      (req.session as any).userId = adminUser.id;
-      (req.session as any).username = adminUser.username;
-      (req.session as any).role = adminUser.role || 'ADMIN';
-      (req.session as any).permissions = adminUser.permissions || [];
-
-      res.json({ 
-        success: true, 
-        message: "ورود موفقیت‌آمیز",
-        user: {
-          id: adminUser.id,
-          username: adminUser.username,
-          role: adminUser.role || 'ADMIN',
-          permissions: adminUser.permissions || [],
-          hasFullAccess: adminUser.role === 'SUPER_ADMIN' || (Array.isArray(adminUser.permissions) && adminUser.permissions.includes('FULL_ACCESS'))
-        }
-      });
-    } catch (error) {
-      console.error("Legacy login error:", error);
-      res.status(500).json({ error: "خطا در فرآیند ورود" });
-    }
-  });
+  // 🗑️ SHERLOCK v18.2: LEGACY LOGIN ENDPOINT REMOVED - Use /api/auth/login only
 
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err: any) => {
@@ -936,15 +888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Invoices API - Protected
-  app.get("/api/invoices", requireAuth, async (req, res) => {
-    try {
-      const invoices = await storage.getInvoices();
-      res.json(invoices);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت فاکتورها" });
-    }
-  });
+  // 🗑️ SHERLOCK v18.2: LEGACY REMOVED - Use detailed invoices endpoint instead
 
   // Unpaid Invoices by Representative API - SHERLOCK v1.0 CRITICAL FIX
   app.get("/api/invoices/unpaid/:representativeId", requireAuth, async (req, res) => {
@@ -1971,29 +1915,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
-  // Payments API - Protected
-  app.get("/api/payments", requireAuth, async (req, res) => {
-    try {
-      const payments = await storage.getPayments();
-      res.json(payments);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت پرداخت‌ها" });
-    }
-  });
+  // 🗑️ SHERLOCK v18.2: LEGACY REMOVED - Use unified statistics endpoints instead
 
-  app.post("/api/payments", requireAuth, async (req, res) => {
-    try {
-      const validatedData = insertPaymentSchema.parse(req.body);
-      const payment = await storage.createPayment(validatedData);
-      res.json(payment);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: "داده‌های ورودی نامعتبر", details: error.errors });
-      } else {
-        res.status(500).json({ error: "خطا در ثبت پرداخت" });
-      }
-    }
-  });
+  // 🗑️ SHERLOCK v18.2: LEGACY REMOVED - Use standardized payment processing endpoints
 
   app.put("/api/payments/:id/allocate", requireAuth, async (req, res) => {
     try {
@@ -2129,14 +2053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // xAI Grok Assistant API
-  app.post("/api/ai/test-connection", requireAuth, async (req, res) => {
-    try {
-      const result = await xaiGrokEngine.testConnection();
-      res.json(result);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در تست اتصال XAI Grok" });
-    }
-  });
+  // 🗑️ SHERLOCK v18.2: LEGACY AI TEST REMOVED - Use /api/settings/xai-grok/test instead
 
   app.post("/api/ai/analyze-financial", requireAuth, async (req, res) => {
     try {
