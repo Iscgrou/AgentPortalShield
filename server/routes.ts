@@ -105,6 +105,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
   app.use("/api/unified-statistics", unifiedStatisticsRoutes);
   
+  // SHERLOCK v18.1: موتور مالی واقعی
+  const trueFinancialRoutes = (await import('./routes/true-financial-routes.js')).default;
+  app.use('/api/true-financial', trueFinancialRoutes);
+  
   // Direct test route to verify workspace functionality
   app.get("/api/workspace-direct-test", async (req, res) => {
     try {
