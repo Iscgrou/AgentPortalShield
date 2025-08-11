@@ -18,19 +18,27 @@ import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface DashboardData {
-  totalRevenue: string;
-  totalDebt: string;
+  totalRevenue: number;
+  totalDebt: number;
+  totalCredit: number;
+  totalOutstanding: number;
+  totalRepresentatives: number;
   activeRepresentatives: number;
-  pendingInvoices: number;
+  inactiveRepresentatives: number;
+  riskRepresentatives: number;
+  totalInvoices: number;
+  paidInvoices: number;
+  unpaidInvoices: number;
   overdueInvoices: number;
+  unsentTelegramInvoices: number;
   totalSalesPartners: number;
-  unsentInvoices: number; // SHERLOCK v12.2: Add unsent invoices field
-  recentActivities: Array<{
-    id: number;
-    type: string;
-    description: string;
-    createdAt: string;
-  }>;
+  activeSalesPartners: number;
+  systemIntegrityScore: number;
+  lastReconciliationDate: string;
+  problematicRepresentativesCount: number;
+  responseTime: number;
+  cacheStatus: string;
+  lastUpdated: string;
 }
 
 function StatCard({ 
@@ -173,7 +181,7 @@ export default function Dashboard() {
         
         <StatCard
           title="فاکتورهای ارسال نشده"
-          value={toPersianDigits((dashboardData.unsentInvoices || 0).toString())}
+          value={toPersianDigits((dashboardData.unsentTelegramInvoices || 0).toString())}
           subtitle="نیازمند ارسال به تلگرام"
           icon={FileText}
           colorClass="text-orange-600"
@@ -187,35 +195,42 @@ export default function Dashboard() {
           <InvoiceUpload />
         </div>
 
-        {/* SHERLOCK v10.0: Cleaned Admin Panel - Only Essential Components */}
+        {/* SHERLOCK v18.0: System Health Overview */}
         <div className="space-y-6">
-          {/* Recent Activities */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Activity className="w-5 h-5 ml-2" />
-                فعالیت‌های اخیر
+                وضعیت سلامت سیستم
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {dashboardData.recentActivities.length > 0 ? (
-                  dashboardData.recentActivities.map((activity) => (
-                    <ActivityItem key={activity.id} activity={activity} />
-                  ))
-                ) : (
-                  <p className="text-sm text-blue-200 text-center py-4">
-                    فعالیت اخیری وجود ندارد
-                  </p>
-                )}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">امتیاز یکپارچگی:</span>
+                  <Badge variant={dashboardData.systemIntegrityScore >= 90 ? "default" : "destructive"}>
+                    {toPersianDigits(dashboardData.systemIntegrityScore.toString())}%
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">نمایندگان مشکل‌دار:</span>
+                  <span className="text-sm font-medium">
+                    {toPersianDigits(dashboardData.problematicRepresentativesCount.toString())}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">زمان پاسخ آمار:</span>
+                  <span className="text-sm font-medium text-green-600">
+                    {toPersianDigits(dashboardData.responseTime.toString())}ms
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">وضعیت Cache:</span>
+                  <Badge variant="outline">
+                    {dashboardData.cacheStatus === 'FRESH' ? 'بروز' : 'Cache'}
+                  </Badge>
+                </div>
               </div>
-              <Button 
-                variant="ghost" 
-                className="w-full mt-4 text-sm text-blue-300 hover:text-white hover:bg-white/10"
-                onClick={() => window.location.href = '/activity-logs'}
-              >
-                مشاهده همه فعالیت‌ها
-              </Button>
             </CardContent>
           </Card>
         </div>
