@@ -53,7 +53,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
-import { FinancialIntegrityDashboard } from "../components/financial-integrity-dashboard";
+import { FinancialIntegrityCard } from "@/components/financial-integrity-card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -849,80 +849,7 @@ export default function Representatives() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center">
-                      <DollarSign className="w-5 h-5 ml-2" />
-                      آمار مالی جامع
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Main Financial Metrics - Enhanced */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="text-center p-4 bg-green-50 dark:bg-green-950 rounded-lg border-2 border-green-200 dark:border-green-800">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">کل فاکتورهای صادر شده</div>
-                        <div className="text-xl font-bold text-green-600 dark:text-green-400">
-                          {formatCurrency(selectedRep.invoices?.reduce((sum, invoice) => sum + parseFloat(invoice.amount), 0) || 0)}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">({selectedRep.invoices?.length || 0} فاکتور)</div>
-                      </div>
-                      
-                      <div className="text-center p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border-2 border-blue-200 dark:border-blue-800">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">کل پرداخت‌های ثبت شده</div>
-                        <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                          {formatCurrency(selectedRep.payments?.reduce((sum, payment) => sum + parseFloat(payment.amount), 0) || 0)}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">({selectedRep.payments?.length || 0} پرداخت)</div>
-                      </div>
-                    </div>
-
-                    {/* Balance Calculation */}
-                    <div className="text-center p-4 bg-red-50 dark:bg-red-950 rounded-lg border-2 border-red-200 dark:border-red-800">
-                      <div className="text-sm text-gray-600 dark:text-gray-400">میزان بدهی نماینده</div>
-                      <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                        {formatCurrency(Math.max(0, 
-                          (selectedRep.invoices?.reduce((sum, invoice) => sum + parseFloat(invoice.amount), 0) || 0) -
-                          (selectedRep.payments?.reduce((sum, payment) => sum + parseFloat(payment.amount), 0) || 0)
-                        ))}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">کل فاکتورها - کل پرداخت‌ها</div>
-                    </div>
-
-                    <Separator />
-                    
-                    {/* Breakdown Details */}
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">پرداخت‌های تخصیص‌یافته:</span>
-                        <span className="font-semibold text-blue-600 dark:text-blue-400">
-                          {formatCurrency(selectedRep.payments?.reduce((sum, payment) => payment.isAllocated ? sum + parseFloat(payment.amount) : sum, 0) || 0)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">اعتبار (تخصیص‌نیافته):</span>
-                        <span className="font-semibold text-green-600 dark:text-green-400">
-                          {formatCurrency(parseFloat(selectedRep.credit || "0"))}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">فاکتورهای پرداخت شده:</span>
-                        <span className="font-semibold text-green-600 dark:text-green-400">
-                          {selectedRep.invoices?.filter(inv => inv.status === 'paid').length || 0}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">فاکتورهای معوقه:</span>
-                        <span className="font-semibold text-red-600 dark:text-red-400">
-                          {selectedRep.invoices?.filter(inv => inv.status === 'overdue').length || 0}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">تاریخ ایجاد:</span>
-                        <span>{new Date(selectedRep.createdAt).toLocaleDateString('fa-IR')}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <FinancialIntegrityCard representativeId={selectedRep.id} />
               </div>
 
               {/* Invoices Section */}

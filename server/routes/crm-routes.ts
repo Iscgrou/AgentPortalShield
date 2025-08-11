@@ -345,87 +345,9 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  // Debt Synchronization Endpoint - Financial System Integration
-  app.post("/api/crm/representatives/:id/sync-debt", crmAuthMiddleware, async (req, res) => {
-    try {
-      const representativeId = parseInt(req.params.id);
-      const { totalDebt, credit, reason, amountChange, invoiceId, timestamp } = req.body;
-      
-      if (isNaN(representativeId)) {
-        return res.status(400).json({ error: 'شناسه نماینده نامعتبر است' });
-      }
-
-      // Get current representative data
-      const currentRep = await db
-        .select()
-        .from(representatives)
-        .where(eq(representatives.id, representativeId))
-        .limit(1);
-
-      if (currentRep.length === 0) {
-        return res.status(404).json({ error: 'نماینده یافت نشد' });
-      }
-
-      // Prepare update data
-      const updateData: any = {
-        updatedAt: new Date()
-      };
-
-      // Update debt if provided
-      if (totalDebt !== undefined) {
-        updateData.totalDebt = totalDebt.toString();
-      }
-
-      // Update credit if provided
-      if (credit !== undefined) {
-        updateData.credit = credit.toString();
-      }
-
-      // Perform the update
-      const updated = await db
-        .update(representatives)
-        .set(updateData)
-        .where(eq(representatives.id, representativeId))
-        .returning();
-
-      // Log the synchronization for audit trail
-      if (reason) {
-        try {
-          await db.insert(activityLogs).values({
-            type: 'debt_sync',
-            description: `همگام‌سازی مالی: ${reason}`,
-            relatedId: representativeId,
-            metadata: {
-              reason,
-              amountChange,
-              invoiceId,
-              timestamp: timestamp || new Date().toISOString(),
-              oldDebt: currentRep[0].totalDebt,
-              newDebt: updateData.totalDebt || currentRep[0].totalDebt,
-              userId: req.session?.crmUser?.id || 0
-            }
-          });
-        } catch (logError) {
-          console.warn('Activity logging failed during debt sync:', logError);
-        }
-      }
-
-      res.json({
-        success: true,
-        message: 'همگام‌سازی مالی با موفقیت انجام شد',
-        data: updated[0],
-        syncDetails: {
-          representativeId,
-          reason: reason || 'manual_sync',
-          timestamp: new Date().toISOString()
-        }
-      });
-
-    } catch (error) {
-      console.error('Debt synchronization error:', error);
-      res.status(500).json({ error: 'خطا در همگام‌سازی مالی' });
-    }
-  });
+  // SHERLOCK v4.0 REMOVED: Legacy debt synchronization endpoint
+  // All financial operations now use standardized Financial Integrity Engine
+  // Use: POST /api/financial-integrity/representative/:id/reconcile
 
   // ==================== CRM AUTHENTICATION ====================
   
