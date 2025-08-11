@@ -1,16 +1,28 @@
 # 🚀 SHERLOCK v17.8 - راهنمای اجرای اپلیکیشن
 
-## 🎯 **مشکل فعلی و راه‌حل**
+## 🎯 **مشکلات Deployment شناسایی شده**
 
-**مشکل**: وب‌ویو ریپلیت چیزی نمایش نمی‌دهد و پیام Configuration pane را نشان می‌دهد.
+**مشکل اصلی**: فایل `.replit` ناقص است و run command ندارد، همچنین host binding اشتباه است.
 
-**راه‌حل**: شما باید دکمه Run را در ریپلیت تنظیم کنید:
+**تشخیص‌های فنی:**
+1. فایل `.replit` فقط modules و ports دارد
+2. run command مشخص نشده 
+3. server روی localhost bind می‌شود نه 0.0.0.0
+4. npm scripts PORT را explicit set نمی‌کند
 
-### 1️⃣ **تنظیم دکمه Run (ضروری)**
-1. در صفحه ریپلیت، روی **Configuration** کلیک کنید
-2. در قسمت **Run Command** بنویسید: `npm run dev`
-3. **Save** کنید
-4. روی دکمه **Run** کلیک کنید
+**راه‌حل‌های مرحله‌ای:**
+
+### 1️⃣ **تنظیم Configuration (ضروری)**
+در Configuration pane ریپلیت:
+- **Run Command**: `./start-server.sh`
+- **Build Command**: (خالی بگذارید)
+- اگر script کار نکرد: `NODE_ENV=development PORT=5000 npx tsx server/index.ts`
+
+### 2️⃣ **روش جایگزین - مستقیم**
+اگر Configuration کار نکرد:
+```bash
+NODE_ENV=development PORT=5000 npx tsx server/index.ts
+```
 
 ### 2️⃣ **اجرای دستی (در حال حاضر کار می‌کند)**
 ```bash

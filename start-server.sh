@@ -1,30 +1,32 @@
 #!/bin/bash
-# SHERLOCK v17.8 Development Server Startup Script
-# This script configures and starts the dual-panel CRM system
+
+# SHERLOCK v17.8 Server Startup Script
+# Fix deployment and command configuration issues
 
 echo "🚀 Starting SHERLOCK v17.8 CRM System..."
-echo "📊 Admin Panel + CRM Panel Architecture"
 
-# Kill any existing processes
-pkill -f "tsx server/index.ts" 2>/dev/null || true
-pkill -f "node.*server/index.ts" 2>/dev/null || true
+# Set environment variables
+export NODE_ENV=development
+export PORT=5000
 
-# Check dependencies
-echo "🔍 Checking environment..."
-node --version
-npm --version
-
-# Check database connection
-echo "🗄️  Verifying database connection..."
-if [ -z "$DATABASE_URL" ]; then
-    echo "❌ DATABASE_URL not found in environment"
-    exit 1
+# Check if dependencies are installed
+if [ ! -d "node_modules" ]; then
+    echo "📦 Installing dependencies..."
+    npm install
 fi
 
-# Start the development server
-echo "⚡ Starting development server on port 5000..."
-echo "📱 Admin Panel: http://localhost:5000/"
-echo "🤖 CRM Panel: http://localhost:5000/crm"
-echo "💊 Health Check: http://localhost:5000/health"
+# Clear any existing processes on port 5000
+echo "🧹 Clearing existing processes..."
+lsof -ti:5000 | xargs kill -9 2>/dev/null || true
+pkill -f "tsx server" 2>/dev/null || true
 
-NODE_ENV=development ./node_modules/.bin/tsx server/index.ts
+# Start the server
+echo "▶️  Starting development server on port $PORT..."
+echo "📝 Environment: $NODE_ENV"
+echo "🌐 Server will be available at: http://0.0.0.0:$PORT"
+echo "🏥 Health check: http://0.0.0.0:$PORT/health"
+echo "👤 Admin Panel: http://0.0.0.0:$PORT/"
+echo "📊 CRM Panel: http://0.0.0.0:$PORT/crm"
+
+# Execute the server with proper binding
+exec npx tsx server/index.ts
