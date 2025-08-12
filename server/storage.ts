@@ -1199,8 +1199,8 @@ export class DatabaseStorage implements IStorage {
         console.log(`🧹 SHERLOCK v17.8 Auto-cleanup: Removed ${cleanupResult.rowCount} old activity logs`);
       }
 
-      // SHERLOCK v17.8 STANDARDIZED CALCULATION:
-      // remainingDebt = unpaid/overdue invoices - allocated payments (NEVER negative)
+      // ✅ SHERLOCK v22.1 CRITICAL FIX: Include 'partial' status in debt calculation
+      // remainingDebt = unpaid/overdue/partial invoices - allocated payments (NEVER negative)
       const debtorReps = await db
         .select({
           id: representatives.id,
@@ -1208,14 +1208,14 @@ export class DatabaseStorage implements IStorage {
           code: representatives.code,
           totalInvoices: sql<string>`COALESCE(SUM(CAST(invoices.amount as DECIMAL)), 0)`,
           totalPayments: sql<string>`COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0)`,
-          remainingDebt: sql<string>`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0))`
+          remainingDebt: sql<string>`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue', 'partial') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0))`
         })
         .from(representatives)
         .leftJoin(invoices, eq(representatives.id, invoices.representativeId))
         .leftJoin(payments, eq(representatives.id, payments.representativeId))
         .groupBy(representatives.id, representatives.name, representatives.code)
-        .having(sql`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0)) > 0`)
-        .orderBy(sql`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0)) DESC`);
+        .having(sql`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue', 'partial') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0)) > 0`)
+        .orderBy(sql`GREATEST(0, COALESCE(SUM(CASE WHEN invoices.status IN ('unpaid', 'overdue', 'partial') THEN CAST(invoices.amount as DECIMAL) ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN payments.is_allocated = true THEN CAST(payments.amount as DECIMAL) ELSE 0 END), 0)) DESC`);
 
       return debtorReps;
     }, 'getDebtorRepresentatives');
@@ -1990,6 +1990,7 @@ export class DatabaseStorage implements IStorage {
   async allocatePaymentToInvoice(paymentId: number, invoiceId: number): Promise<Payment> {
     return await withDatabaseRetry(
       async () => {
+        // ✅ SHERLOCK v22.1: Update payment allocation
         const [updatedPayment] = await db
           .update(payments)
           .set({ 
@@ -1998,6 +1999,9 @@ export class DatabaseStorage implements IStorage {
           })
           .where(eq(payments.id, paymentId))
           .returning();
+        
+        // ✅ CRITICAL FIX: Update invoice status based on payment allocation
+        await this.updateInvoiceStatusAfterAllocation(invoiceId);
         
         return updatedPayment;
       },
@@ -2071,16 +2075,11 @@ export class DatabaseStorage implements IStorage {
                 invoiceId: invoice.id,
                 amount: payment.amount
               });
-
-              // Update invoice status if fully paid
-              if (parseFloat(payment.amount) >= remainingAmount) {
-                await db
-                  .update(invoices)
-                  .set({ status: 'paid' })
-                  .where(eq(invoices.id, invoice.id));
-              }
               
-              break; // Move to next payment
+              // ✅ SHERLOCK v22.1: Update invoice status after allocation
+              await this.updateInvoiceStatusAfterAllocation(invoice.id);
+              
+              break; // This payment is now allocated, move to next payment
             }
           }
         }
@@ -2093,6 +2092,48 @@ export class DatabaseStorage implements IStorage {
       },
       'autoAllocatePayments'
     );
+  }
+
+  /**
+   * SHERLOCK v22.1: Update invoice status based on payment allocation
+   */
+  private async updateInvoiceStatusAfterAllocation(invoiceId: number): Promise<void> {
+    // Get invoice details
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    if (!invoice) return;
+
+    // Calculate total allocated payments for this invoice
+    const allocatedPayments = await db.select({
+      total: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`
+    }).from(payments).where(
+      and(
+        eq(payments.invoiceId, invoiceId),
+        eq(payments.isAllocated, true)
+      )
+    );
+
+    const totalAllocated = allocatedPayments[0]?.total || 0;
+    const invoiceAmount = parseFloat(invoice.amount);
+
+    // Determine new status
+    let newStatus: string;
+    if (totalAllocated >= invoiceAmount) {
+      newStatus = 'paid';
+    } else if (totalAllocated > 0) {
+      newStatus = 'partial';
+    } else {
+      newStatus = 'unpaid';
+    }
+
+    // Update invoice status if changed
+    if (invoice.status !== newStatus) {
+      await db
+        .update(invoices)
+        .set({ status: newStatus })
+        .where(eq(invoices.id, invoiceId));
+      
+      console.log(`📝 SHERLOCK v22.1: Updated invoice ${invoice.invoiceNumber} status: ${invoice.status} → ${newStatus}`);
+    }
   }
 
   async getPaymentAllocationSummary(representativeId: number): Promise<{

@@ -7,7 +7,7 @@
 
 import { db } from '../db.js';
 import { representatives, invoices, payments } from '../../shared/schema.js';
-import { eq, sql, desc } from 'drizzle-orm';
+import { eq, sql, desc, and } from 'drizzle-orm';
 
 export interface UnifiedFinancialData {
   representativeId: number;
@@ -73,12 +73,13 @@ class UnifiedFinancialEngine {
       throw new Error(`Representative ${representativeId} not found`);
     }
 
-    // Real-time invoice calculations
+    // Real-time invoice calculations - SHERLOCK v22.1 CRITICAL FIX
     const invoiceData = await db.select({
       count: sql<number>`COUNT(*)`,
       totalAmount: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`,
       paidAmount: sql<number>`COALESCE(SUM(CASE WHEN status = 'paid' THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
-      unpaidAmount: sql<number>`COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue') THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
+      // ✅ CRITICAL FIX: Include 'partial' status in unpaid calculation
+      unpaidAmount: sql<number>`COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue', 'partial') THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
       lastDate: sql<string>`MAX(created_at)`
     }).from(invoices).where(eq(invoices.representativeId, representativeId));
 
@@ -92,8 +93,12 @@ class UnifiedFinancialEngine {
     const invoice = invoiceData[0];
     const payment = paymentData[0];
 
-    // Calculate actual debt using FIFO principle
-    const actualDebt = Math.max(0, invoice.unpaidAmount - payment.allocatedAmount);
+    // ✅ SHERLOCK v22.1 CRITICAL FIX: Calculate debt using REAL-TIME allocation
+    // Step 1: Get EXACT unpaid amount considering partial payments
+    const realTimeUnpaid = await this.calculateRealTimeUnpaidAmount(representativeId);
+    
+    // Step 2: Calculate actual debt using allocated payments
+    const actualDebt = Math.max(0, realTimeUnpaid - payment.allocatedAmount);
     
     // Performance metrics
     const paymentRatio = invoice.totalAmount > 0 ? (payment.allocatedAmount / invoice.totalAmount) * 100 : 0;
@@ -112,7 +117,7 @@ class UnifiedFinancialEngine {
       
       totalSales: invoice.totalAmount,
       totalPaid: payment.allocatedAmount,
-      totalUnpaid: invoice.unpaidAmount,
+      totalUnpaid: realTimeUnpaid, // ✅ Use real-time calculation
       actualDebt,
       
       paymentRatio: Math.round(paymentRatio * 100) / 100,
@@ -128,6 +133,46 @@ class UnifiedFinancialEngine {
   }
 
   /**
+   * SHERLOCK v22.1: Real-time unpaid amount calculation
+   * Accounts for partial payments and actual invoice-payment allocation
+   */
+  private async calculateRealTimeUnpaidAmount(representativeId: number): Promise<number> {
+    // Get all invoices for this representative
+    const invoiceList = await db.select({
+      id: invoices.id,
+      amount: invoices.amount,
+      status: invoices.status
+    }).from(invoices).where(eq(invoices.representativeId, representativeId));
+
+    let totalUnpaidAmount = 0;
+
+    for (const invoice of invoiceList) {
+      if (invoice.status === 'paid') {
+        // Skip fully paid invoices
+        continue;
+      }
+
+      // Calculate actual allocated payments for this specific invoice
+      const allocatedToThisInvoice = await db.select({
+        total: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`
+      }).from(payments).where(
+        and(
+          eq(payments.invoiceId, invoice.id),
+          eq(payments.isAllocated, true)
+        )
+      );
+
+      const allocatedAmount = allocatedToThisInvoice[0]?.total || 0;
+      const invoiceAmount = parseFloat(invoice.amount);
+      const remainingAmount = Math.max(0, invoiceAmount - allocatedAmount);
+
+      totalUnpaidAmount += remainingAmount;
+    }
+
+    return totalUnpaidAmount;
+  }
+
+  /**
    * System-wide financial summary
    */
   async calculateGlobalSummary(): Promise<GlobalFinancialSummary> {
@@ -139,11 +184,11 @@ class UnifiedFinancialEngine {
       active: sql<number>`SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END)`
     }).from(representatives);
 
-    // Global invoice aggregates
+    // Global invoice aggregates - SHERLOCK v22.1 FIX: Include partial status
     const invoiceGlobal = await db.select({
       totalAmount: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`,
       paidAmount: sql<number>`COALESCE(SUM(CASE WHEN status = 'paid' THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
-      unpaidAmount: sql<number>`COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue') THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`
+      unpaidAmount: sql<number>`COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue', 'partial') THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`
     }).from(invoices);
 
     // Global payment aggregates
