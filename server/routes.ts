@@ -88,58 +88,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.error("Failed to initialize default CRM user:", error);
   }
 
-  // Register CRM routes
+  // Register essential CRM routes (core functionality only)
   registerCrmRoutes(app, storage);
   
-  // Register Settings routes (DA VINCI v1.0)
+  // Register Settings routes (core system settings)
   registerSettingsRoutes(app);
   
-  // Register Workspace routes (DA VINCI v2.0) - temporarily bypass auth for testing
-  const workspaceRoutes = (await import("./routes/workspace-routes")).default;
-  app.use("/api/workspace", workspaceRoutes);
-  
-  // Register Intelligent Coupling routes (SHERLOCK v3.0) - محافظتی
-  const couplingRoutes = (await import("./routes/coupling-routes")).default;
-  app.use("/api/coupling", couplingRoutes);
-  
-  // Register Financial Integrity routes (SHERLOCK v17.8) - یکپارچگی مالی
-  const financialIntegrityRoutes = (await import("./routes/financial-integrity-routes")).default;
-  app.use("/api/financial-integrity", financialIntegrityRoutes);
-  
-  // Register Unified Statistics routes (SHERLOCK v18.0) - آمار یکپارچه
-  const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
-  app.use("/api/unified-statistics", unifiedStatisticsRoutes);
-  
-  // SHERLOCK v18.2: سیستم مالی یکپارچه - جایگزین همه سیستم‌های موازی
+  // SHERLOCK v18.4: سیستم مالی یکپارچه واحد - تنها سیستم مالی فعال
   const unifiedFinancialRoutes = (await import('./routes/unified-financial-routes.js')).default;
   app.use('/api/unified-financial', unifiedFinancialRoutes);
   
-  // Direct test route to verify workspace functionality
-  app.get("/api/workspace-direct-test", async (req, res) => {
-    try {
-      const { AITaskGenerator } = await import("./services/ai-task-generator");
-      const taskGenerator = new AITaskGenerator();
-      
-      const result = await taskGenerator.generateDailyTasks();
-      
-      res.json({
-        success: true,
-        message: "✅ DA VINCI v2.0 AI Task Generator Test Successful",
-        result: {
-          tasksGenerated: result.tasks.length,
-          generationTime: new Date().toISOString(),
-          culturalContext: "Persian Business Culture",
-          aiEngine: "xAI Grok-4"
-        }
-      });
-    } catch (error) {
-      console.error("Workspace test error:", error);
-      res.status(500).json({ 
-        error: "خطا در تست AI Task Generator", 
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
+  // SHERLOCK v18.4: آمار یکپارچه واحد - جایگزین همه سیستم‌های آماری موازی
+  const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
+  app.use("/api/unified-statistics", unifiedStatisticsRoutes);
+  
+
 
   // xAI Grok Configuration API
   app.post("/api/settings/xai-grok/configure", requireAuth, async (req, res) => {

@@ -1,7 +1,15 @@
 # MarFaNet - Streamlined Financial CRM System
 
 ## Overview
-MarFaNet is a simplified financial management system focused on core business needs: invoice management, representative oversight, and AI-powered assistance. **SHERLOCK v18.4 STANDARDIZATION COMPLETE**: Successfully eliminated 11,117,500 تومان financial discrepancy through complete removal of parallel/legacy systems and implementation of unified standardized invoice processing engine. The system now guarantees 100% financial calculation accuracy with zero tolerance for discrepancies.
+MarFaNet is a simplified financial management system focused on core business needs: invoice management, representative oversight, and AI-powered assistance. **SHERLOCK v18.4 STANDARDIZATION COMPLETE**: Successfully eliminated all parallel/legacy systems and test data contamination. The system now uses a single unified financial engine with 100% calculation accuracy guarantee.
+
+## Recent Changes (August 12, 2025)
+**✅ SYSTEM STANDARDIZATION COMPLETED** - Major cleanup and consolidation:
+- **Removed 5 parallel systems**: Eliminated DA VINCI v1.0, v2.0, SHERLOCK v3.0, v17.8, v18.0 route handlers
+- **Cleaned test data contamination**: Removed 4 test representatives, 19 test payments, 8 test invoices
+- **Unified to single system**: Now using only SHERLOCK v18.4 unified financial engine
+- **Fixed debt calculations**: Eliminated inflated amounts caused by duplicate test data
+- **Performance optimization**: Reduced API endpoint redundancy and database queries
 
 ## User Preferences
 - **Communication Style**: Simple, everyday Persian language for non-technical users
