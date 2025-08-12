@@ -196,7 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Logout error:", err);
         return res.status(500).json({ error: "خطا در فرآیند خروج" });
       }
-      res.clearCookie('connect.sid');
+      res.clearCookie('marfanet.sid');
       res.json({ success: true, message: "خروج موفقیت‌آمیز" });
     });
   });

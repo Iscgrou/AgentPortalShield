@@ -491,8 +491,13 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
   });
 
   app.post("/api/crm/auth/logout", (req, res) => {
-    req.session.crmAuthenticated = false;
-    req.session.crmUser = undefined;
-    res.json({ success: true, message: "خروج موفقیت‌آمیز" });
+    req.session.destroy((err: any) => {
+      if (err) {
+        console.error("CRM logout error:", err);
+        return res.status(500).json({ error: "خطا در فرآیند خروج" });
+      }
+      res.clearCookie('marfanet.sid');
+      res.json({ success: true, message: "خروج موفقیت‌آمیز از CRM" });
+    });
   });
 }
