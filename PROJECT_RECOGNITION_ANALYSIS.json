@@ -1,0 +1,124 @@
+{
+  "شرلوک_v18_1_تحلیل_تشخیص_پروژه": {
+    "وضعیت_فعلی": {
+      "نمره_تطابق": 95,
+      "سطح_پشتیبانی": "کامل",
+      "موانع_شناسایی_شده": []
+    },
+    
+    "مراحل_تشخیص": {
+      "مرحله_1_تشخیص_زبان": {
+        "منبع_اولیه": ".replit modules",
+        "ارزیابی": "✅ nodejs-20, web, postgresql-16",
+        "وزن_تصمیم": "بالا"
+      },
+      "مرحله_2_تشخیص_فریمورک": {
+        "منبع": "package.json dependencies",
+        "ارزیابی": "✅ Express + React + Vite + TypeScript + Drizzle",
+        "الگوی_شناسایی": "modern fullstack"
+      },
+      "مرحله_3_ساختار": {
+        "منبع": "directory structure",
+        "ارزیابی": "✅ client/server/shared separation",
+        "وزن_تصمیم": "متوسط"
+      }
+    },
+
+    "الزامات_حداقلی": {
+      "replit_config": {
+        "modules_الزامی": ["nodejs-20"],
+        "modules_اختیاری": ["web", "postgresql-16"],
+        "run_command": "npm run dev",
+        "workflows_ضروری": true
+      },
+      "package_json": {
+        "type_module": "ضروری",
+        "scripts_pattern": {
+          "dev": "tsx server/index.ts",
+          "build": "vite build + esbuild",
+          "start": "node dist/index.js"
+        },
+        "dependencies_core": [
+          "express",
+          "react", 
+          "vite",
+          "@vitejs/plugin-react",
+          "typescript"
+        ]
+      }
+    },
+
+    "ساختار_بهینه": {
+      "client/": {
+        "توضیح": "React frontend",
+        "الزامات": ["index.html", "src/", "vite.config.ts"]
+      },
+      "server/": {
+        "توضیح": "Express backend", 
+        "الزامات": ["index.ts", "routes.ts"]
+      },
+      "shared/": {
+        "توضیح": "Common types/schemas",
+        "الزامات": ["schema.ts"]
+      }
+    },
+
+    "نکات_بهینه_سازی": {
+      "performance": {
+        "max_file_lines": "نامحدود برای پروژه‌های ساختاریافته",
+        "max_project_files": "نامحدود با ساختار صحیح"
+      },
+      "imports": {
+        "alias_pattern": "@/ برای client, @shared برای shared",
+        "module_resolution": "bundler (توصیه شده)"
+      },
+      "database": {
+        "drizzle_config": "اختیاری اما توصیه شده",
+        "schema_location": "shared/schema.ts"
+      }
+    },
+
+    "موانع_رایج": {
+      "config_issues": [
+        "عدم تطابق alias ها در vite و tsconfig",
+        "استفاده از localhost به جای 0.0.0.0"
+      ],
+      "structure_issues": [
+        "entry points نامعلوم",
+        "mixing CommonJS و ES modules"
+      ]
+    },
+
+    "تغییرات_پیشنهادی": {
+      "اولویت_بالا": [],
+      "اولویت_متوسط": [
+        "بهینه‌سازی import paths",
+        "افزودن error boundaries"
+      ],
+      "اولویت_پایین": [
+        "بهبود documentation",
+        "cleanup unused dependencies"
+      ]
+    }
+  },
+
+  "نمونه_حداقلی_100٪_پشتیبانی": {
+    "فایل‌های_اساسی": {
+      ".replit": "modules = [\"nodejs-20\", \"web\"]\\nrun = \"npm run dev\"",
+      "package.json": "type: module, scripts: dev/build/start",
+      "client/index.html": "Vite entry point",
+      "server/index.ts": "Express app with 0.0.0.0 binding",
+      "vite.config.ts": "React plugin + aliases",
+      "tsconfig.json": "bundler resolution + paths"
+    }
+  },
+
+  "پاسخ_به_سؤالات_کلیدی": {
+    "ترتیب_کلیدها_replit": "اهمیت ندارد",
+    "hidden_placement": "محل قرارگیری اهمیت ندارد",
+    "deployment_target": "تأثیری بر AI ندارد",
+    "workflow_naming": "case-insensitive",
+    "typescript_incremental": "توصیه می‌شود",
+    "alias_consistency": "باید vite و tsconfig یکسان باشند"
+  }
+}

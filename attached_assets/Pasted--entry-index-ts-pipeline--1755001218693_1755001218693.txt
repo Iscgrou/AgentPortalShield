@@ -1,0 +1,30 @@
+
+جایگزین‌های واقعی برای entry فایل‌ها را مشخص نکرده (مثلاً index.ts صریح نشده).
+ترتیب دقیق pipeline فقط به صورت ناقص (→ → entry files…) آمده؛ مراحل و اولویت امتیازدهی کمی ذکر نشده.
+هیچ عدد/آستانه (حداکثر خطوط فایل، تعداد فایل‌ها، اندازه باندل) ارائه نشده.
+در مورد کدام کلیدهای .replit ترتیب‌شان حساس است شفاف نیست (فقط گفته اهمیت دارد).
+نگفته PORT را دقیقاً چگونه دینامیک تنظیم کنیم (مثلاً استفاده از process.env.PORT بدون تعیین در [env]).
+درباره اینکه چه چیزی «پشتیبانی کامل» را فعال می‌کند (پرچم‌ها / conditions) خروجی ساختارمند نداده.
+نمونه canonical package.json بسیار ساده و با معماری فعلی (Express + middleware + esbuild) هم‌راستا نیست.
+تفاوت واقعی بین autoscale و gce را فنی توضیح نداده (فقط ادعا).
+درباره dynamic import افزونه Cartographer نتیجه قطعی نداده (فقط احتمال).
+نگفته hidden باید بالا باشد چرا (پارس خطی؟) و چه خطایی رخ می‌دهد اگر نباشد.
+در مورد تاثیر noEmit فقط کلی گفته؛ راه‌حل (مثلاً اسکریپت جدا برای build types) نداده.
+مورد Drizzle: شرط‌ها، نیاز به push یا نه، اصلاً روشن نشده.
+پیشنهاد: از دستیار بخواه با فرمت ساختارمند (JSON) این موارد را شفاف کند:
+
+detectionPipeline: آرایه مراحل با weight هر مرحله.
+requiredSignals: لیست دقیق فایل‌ها/کلیدها + آیا اختیاری یا اجباری.
+fileOrderingRules: آیا ordering در .replit الزام دارد؟ مثال معتبر/نامعتبر.
+dynamicPortGuidance: نمونه کد server + تنظیم .replit بدون [env] ثابت.
+thresholds: {maxFileLines, maxBundleKB, maxRouteFileLines}.
+canonicalConfigs: بلوک کامل .replit و package.json هم‌راستا با معماری Express+Vite middleware.
+blockers: آرایه با code, description, remediation.
+minimalDiff: patch پیشنهادی (diff) برای ریپوی ما.
+aliasRules: آیا همه alias ها باید در tsconfig و vite یکسان باشند؟
+pluginLoading: آیا dynamic import افزونه‌ها کاهش پشتیبانی می‌دهد؟ پاسخ yes/no و دلیل.
+envPolicy: آیا قرار دادن PORT در [env] مضر است؟ اگر بله، چرا.
+largeFileStrategy: آیا splitting الزامی است یا توصیه؟ آستانه.
+sessionWsPattern: آیا قرار دادن WebSocket و session در یک فایل باعث غیرفعال شدن بخشی از تحلیل می‌شود؟
+drizzleIntegration: آیا وجود drizzle.config.ts فقط برای migration features لازم است یا برای detection AI هم نقشی دارد؟
+supportStates: enum حالت‌های پشتیبانی + شرط عبور به هر حالت.

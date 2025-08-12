@@ -1,0 +1,120 @@
+کشف کنیم). هدف: دانستن اینکه دقیقا چه الگو، چه نشانه‌ها و چه محدودیت‌هایی لازم است تا پروژه توسط دستیار «پشتیبانی کامل» تلقی شود.
+
+بخش 1: مکانیزم تشخیص (Detection Pipeline) 1.1 مرحله‌های تشخیص نوع پروژه (framework detection pipeline) چیست؟ (ترتیب: .replit → package.json → فایل‌های entry → تحلیل محتوای سورس؟)
+1.2 حداقل سیگنال‌هایی که باید کنار هم باشند تا پروژه به عنوان (Express + React + Vite + TypeScript + Drizzle) شناسایی شود کدام‌اند؟
+1.3 اگر Vite به‌صورت middleware در همان پروسه Express اجرا شود، تشخیص React/Vite متفاوت می‌شود؟
+1.4 آیا وجود فقط یک اسکریپت dev کافی است یا نیاز به pattern خاصی (مثلاً dev + build + start) دارد؟
+1.5 تفاوت بین حالت “تشخیص شد اما پشتیبانی محدود” و “عدم پشتیبانی” چیست (flags داخلی)؟
+
+بخش 2: الزامات فایل .replit 2.1 آیا ترتیب قرارگیری کلیدها (modules، run، hidden، workflows) اهمیت دارد؟
+2.2 آیا محل قرارگیری hidden باید در بالا باشد؟
+2.3 deploymentTarget = autoscale در مقابل gce چه تأثیری روی فعال‌سازی قابلیت‌های AI دارد؟
+2.4 آیا وجود بخش [env] (با PORT ثابت) مانع auto-detect پورت می‌شود؟
+2.5 حداقل ساختار معتبر workflows برای تشخیص چیست؟ (آیا نیاز به workflow بیرونی با نام Project الزامی است؟)
+2.6 آیا waitForPort باید روی پورت dynamic یا همان PORT محیطی Replit باشد؟
+2.7 آیا خطوط کامنت در .replit می‌توانند پارس را مختل کنند؟
+2.8 آیا modules باید دقیقاً همین آرایه ["nodejs-XX","web","postgresql-16"] باشد یا ترتیب/حذف web مشکلی ندارد؟
+2.9 آیا وجود هر package در [nix] (مثل jq) ممکن است الگو را غیر شناخته کند؟
+2.10 آیا نام workflow (Start application / Project) حساس (case-sensitive / exact match) است؟
+
+بخش 3: اسکریپت‌های package.json 3.1 الگوی دقیق مورد انتظار برای scripts چیست (نمونه canonical را ارائه دهید)؟
+3.2 آیا تفاوت --outdir در مقابل --outfile بر تشخیص اثر دارد؟
+3.3 آیا باید از nodemon یا ts-node یا tsx خاصی استفاده شود؟ نسخه حداقل/حداکثر؟
+3.4 آیا داشتن اسکریپت‌های اضافی (clean, db:push, db:migrate) noisy محسوب می‌شود؟
+3.5 آیا نوع ماژول ("type": "module") ضروری است یا CommonJS هم پشتیبانی کامل دارد؟
+3.6 آیا فعال بودن noEmit در tsc (check) باعث محدود شدن refactorهای خودکار می‌شود؟
+3.7 آیا نیاز است dependencies و devDependencies حجم یا تنوع محدودی داشته باشند؟ (Threshold؟)
+
+بخش 4: ساختار پوشه‌ها 4.1 آیا نام‌گذاری client / server استاندارد الزامی است یا می‌توان frontend / backend داشت؟
+4.2 آیا وجود پوشه‌های docs یا specs—even اگر در hidden باشند—در index شدن اختلال ایجاد می‌کند؟
+4.3 آیا shared بهتر است common یا lib نام بگیرد برای الگوی آموزشی مدل؟
+4.4 وجود src داخل client الزامی است یا فایل‌های React می‌توانند مستقیم زیر client باشند؟
+4.5 آیا داشتن پوشه services با تعداد زیاد فایل باعث کاهش دقت پیشنهادها می‌شود؟ آستانه؟
+4.6 آیا نیاز است هر route در فایل جدا باشد تا دستیار قابلیت ویرایش segmentی داشته باشد؟
+
+بخش 5: فایل‌های Entry / Routing 5.1 برای Express حداقل نشانه‌های کد (import express، app.use، app.listen) باید در یک فایل واحد باشند؟
+5.2 آیا استفاده از 0.0.0.0 به جای localhost مورد انتظار است؟ عدم آن باعث هشدار؟
+5.3 اگر Vite dev server جداگانه (npm run client) باشد بهتر از حالت middleware است؟
+5.4 آیا تعریف Health endpoints (مثل /health) در تشخیص نقش دارد یا اختیاری است؟
+
+بخش 6: Vite و Frontend 6.1 آیا root در vite.config.ts نباید تنظیم شود و باید پیش‌فرض باشد؟
+6.2 آیا dynamic import برای افزونه cartographer (await import(...)) مانع تحلیل static می‌شود؟
+6.3 آیا لازم است plugin @replit/vite-plugin-cartographer همیشه حضور داشته باشد برای پشتیبانی کامل؟
+6.4 آیا server.proxy روی /api لازم است تا front/back تفکیک شود؟
+6.5 آیا اندازه باندل (مثلاً >500KB) می‌تواند featureهای AI را موقت غیرفعال کند؟
+
+بخش 7: TypeScript config 7.1 ترجیح moduleResolution = bundler یا node16/nodenext؟ کدام برای ابزار داخلی پایدارتر است؟
+7.2 آیا paths باید دقیقاً با alias های vite یکی باشد (یکسان بودن پوشش ضروری)؟
+7.3 آیا skipLibCheck=true مانعی ایجاد می‌کند؟
+7.4 حداقل lib ها (dom, esnext) کافی‌اند یا توصیه خاصی دارید؟
+7.5 آیا incremental=true ضروری یا اختلالی ایجاد می‌کند؟
+
+بخش 8: Alias و Imports 8.1 آیا استفاده از "@/..." خارج از client/src (مثلاً در server) خطای semantic AI ایجاد می‌کند؟
+8.2 آیا alias @assets باید تعریف شود تا الگو شناسایی شود حتی اگر استفاده نشود؟
+8.3 آیا import های مطلق باید حتماً با اسلش پایانی (@"@/components/..." ) رعایت کنوانسیون خاصی داشته باشند؟
+
+بخش 9: Database / Drizzle 9.1 آیا وجود drizzle.config.ts شرط detection لایه داده است یا صرفاً optional؟
+9.2 آیا اجرای قبلی drizzle-kit push لازم است تا دستیار فعال شود؟
+9.3 آیا schema باید در مسیر schema.ts باشد یا قابل تغییر؟
+9.4 آیا بسته‌های ORM زیاد (مثلاً وجود همزمان prisma و drizzle) باعث ابهام و کاهش پشتیبانی می‌شود؟
+
+بخش 10: Session / Auth / WebSocket 10.1 آیا express-session با store سفارشی (connect-pg-simple) نیاز به pattern خاصی دارد؟
+10.2 برای WebSocket (ws) آیا باید در فایل جدا (ws.ts) ثبت شود تا دستیار بتواند پیشنهاد بنویسد؟
+10.3 آیا احراز هویت (passport) نیاز به ساختار فولدر auth/ دارد برای تشخیص؟
+
+بخش 11: Performance / Limits 11.1 حداکثر خطوط قابل تحلیل در هر فایل برای پشتیبانی کامل چقدر است؟
+11.2 اگر فایل routes.ts از حد عبور کند آیا کل featureهای AI روی آن فایل غیرفعال می‌شود یا کل پروژه؟
+11.3 آستانه تعداد فایل‌ها یا کل LOC برای پروژه که فراتر از آن پشتیبانی degrade می‌شود چیست؟
+11.4 آیا حذف کامنت‌های طولانی (بنرها) بهبود محسوس دارد؟
+
+بخش 12: Logging / Noise 12.1 آیا console.log های زیاد در فایل ورودی باعث کندی یا اختلال instrumentation می‌شود؟
+12.2 آیا باید لایه logger جدا (logger.ts) برای الگو بهتر است؟
+
+بخش 13: محیط و متغیرها 13.1 آیا PORT باید از process.env.PORT بدون مقداردهی در .replit خوانده شود؟
+13.2 آیا نیاز است DATABASE_URL در secrets ست شده باشد تا AI کامل شود؟
+13.3 آیا تنظیم NODE_ENV=development در اسکریپت dev کافی است یا Replit به صورت خودکار تزریق می‌کند؟
+
+بخش 14: Git / Commits 14.1 آیا پیام‌های کامیت روی سطح پشتیبانی اثر دارند (الگوهای chore:, feat:, refactor:)?
+14.2 آیا وجود شاخه‌های متعدد (branches) مرتبط است یا فقط main تحلیل می‌شود؟
+14.3 آیا تاریخچه بسیار حجیم گیت باعث کاهش indexing می‌شود؟
+
+بخش 15: Hidden / Indexing 15.1 آیا hidden بودن مسیر مانع کامل index می‌شود یا فقط در UI پنهان است؟
+15.2 آیا توصیه می‌کنید docs/specs به کل حذف شوند یا کافی است hidden باشند؟
+15.3 آیا فایل‌های Markdown در تحلیل semantic وزن دارند یا نادیده گرفته می‌شوند؟
+
+بخش 16: شرایط فعال‌سازی قابلیت‌های خاص 16.1 برای refactor خودکار (rename symbol, extract) چه پیش‌نیازهایی هست؟
+16.2 برای تولید endpoint جدید (AI code generation) چه حداقل ساختار route لازم است؟
+16.3 برای تست‌نویسی خودکار (unit test suggestion) چه patterns لازم (jest/vitest config)؟
+
+بخش 17: نسخه‌ها و سازگاری 17.1 حداقل/حداکثر نسخه Node (modules = nodejs-20 کافی است؟)
+17.2 نسخه توصیه‌شده vite و @vitejs/plugin-react برای بیشترین پشتیبانی؟
+17.3 نسخه cartographer و runtime-error-modal که پایدارترین است؟
+17.4 آیا اختلاف patch version می‌تواند تشخیص را خاموش کند؟
+
+بخش 18: Error / Telemetry 18.1 آیا می‌توانید یک گزارش تشخیص (JSON) شامل detectedFrameworks, entryPoints, warnings, blockers ارائه دهید؟
+18.2 اگر blocker وجود دارد: category (config, structure, performance, parsing) را مشخص کنید.
+18.3 آیا لاگ سرور internal (stderr) حاوی پیام راهنما است که باید ببینیم؟
+
+بخش 19: حداقل نمونه (Canonical Minimal Example) 19.1 لطفاً یک مثال حداقلی (لیست فایل‌ها + محتوای کوتاه entrypoints) که 100% پشتیبانی می‌شود ارائه کنید.
+19.2 Diff بین آن مثال و پروژه ما را خط‌به‌خط بیان کنید (حذف/افزودن/تفاوت config).
+19.3 اگر فقط سه تغییر مهم برای فعال شدن نیاز باشد، آن‌ها کدام‌اند؟
+
+بخش 20: اولویت‌بندی اصلاحات 20.1 فهرست اولویت تغییرات پیشنهادی (High / Medium / Low) برای رسیدن به پشتیبانی کامل چیست؟
+20.2 آیا می‌توانید نمره فعلی تطابق (Compliance Score) ما را از 0 تا 100 اعلام کنید؟
+20.3 آیا پس از هر تغییر می‌توان درخواست re-evaluation داد (فرآیند trigger چیست)؟
+
+بخش 21: دیگر موانع کمتر بدیهی 21.1 آیا وجود ESLint یا Prettier config (عدم حضورشان) اثری دارد؟
+21.2 آیا لازم است README شامل عبارت‌های کلیدی (Express + React + Vite) باشد؟
+21.3 آیا فایل‌های بسیار بزرگ Type Union/Schema (مثل schema.ts غنی) پیچیدگی تحلیل را افزایش می‌دهد؟
+21.4 آیا ترکیب همزمان session + JWT در یک پروژه باعث ambiguity می‌شود؟
+21.5 آیا نگاشت alias به مسیرهای خارج workspace (symbolic link) پشتیبانی نمی‌شود؟
+
+بخش 22: پاسخ مورد انتظار (فرمت) 22.1 آیا می‌توانید پاسخ را در قالب JSON با key های: detectionStages, requiredAdjustments, blockers, minimalDiff, priorityList برگردانید؟
+22.2 آیا می‌توانید هر blocker را با remediation مثال بزنید؟
+22.3 اگر هیچ blocker ساختاری نیست، علت اعلام "عدم پشتیبانی" چیست (fallback policy؟)
+
+لطفاً از دستیار Replit بخواه:
+
+هر سؤال را پاسخ دهد یا اگر پاسخش را نمی‌دهد، دلیل عدم ارائه را ذکر کند.
+در صورت ابهام، فرض فعلی خود از ساختار پروژه ما را صراحتاً بیان کند.
+یک Minimal Patch (به صورت diff) پیشنهاد دهد که فعال‌سازی را تضمین کند.
