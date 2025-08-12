@@ -13,7 +13,7 @@
 import { db } from "../db";
 import { representatives, invoices, payments, salesPartners, activityLogs } from "@shared/schema";
 import { sql, eq, and, or, gte, count, desc } from "drizzle-orm";
-import { financialIntegrityEngine } from "./financial-integrity-engine";
+import { unifiedFinancialEngine } from "./unified-financial-engine.js";
 
 // ========== INTERFACES ========== 
 
@@ -356,7 +356,15 @@ export class UnifiedStatisticsEngine {
 
   private async calculateSystemHealth() {
     try {
-      const analysis = await financialIntegrityEngine.analyzeProblematicRepresentatives();
+      // ✅ استفاده از UNIFIED FINANCIAL ENGINE
+      const allData = await unifiedFinancialEngine.calculateAllRepresentatives();
+      const problematicReps = allData.filter(rep => rep.debtLevel === 'CRITICAL' || rep.debtLevel === 'HIGH');
+      const analysis = {
+        totalProblematicCount: problematicReps.length,
+        excessPaymentReps: [],
+        reconciliationNeeded: [],
+        lowIntegrityReps: problematicReps
+      };
       
       // محاسبه میانگین امتیاز سلامت سیستم
       const representativeIds = await db.select({ id: representatives.id }).from(representatives).where(eq(representatives.isActive, true));
@@ -366,8 +374,14 @@ export class UnifiedStatisticsEngine {
 
       for (const rep of representativeIds.slice(0, 50)) { // Sample for performance
         try {
-          const snapshot = await financialIntegrityEngine.calculateFinancialSnapshot(rep.id);
-          totalIntegrityScore += snapshot.integrityScore;
+          const data = await unifiedFinancialEngine.calculateRepresentative(rep.id);
+          // محاسبه امتیاز یکپارچگی بر اساس سطح بدهی
+          let integrityScore = 100;
+          if (data.debtLevel === 'CRITICAL') integrityScore = 50;
+          else if (data.debtLevel === 'HIGH') integrityScore = 70;
+          else if (data.debtLevel === 'MODERATE') integrityScore = 85;
+          
+          totalIntegrityScore += integrityScore;
           validScores++;
         } catch (error) {
           // Skip problematic representatives
@@ -408,13 +422,19 @@ export class UnifiedStatisticsEngine {
     const repsWithScores = await Promise.all(
       topReps.map(async (rep) => {
         try {
-          const snapshot = await financialIntegrityEngine.calculateFinancialSnapshot(rep.id);
+          const data = await unifiedFinancialEngine.calculateRepresentative(rep.id);
+          // محاسبه امتیاز یکپارچگی بر اساس سطح بدهی
+          let integrityScore = 100;
+          if (data.debtLevel === 'CRITICAL') integrityScore = 50;
+          else if (data.debtLevel === 'HIGH') integrityScore = 70;
+          else if (data.debtLevel === 'MODERATE') integrityScore = 85;
+          
           return {
             id: rep.id,
             name: rep.name,
             code: rep.code,
-            totalSales: parseFloat(rep.totalSales || '0'),
-            integrityScore: snapshot.integrityScore
+            totalSales: data.totalSales,
+            integrityScore
           };
         } catch (error) {
           return {

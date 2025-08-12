@@ -79,7 +79,7 @@ class UnifiedFinancialEngine {
       totalAmount: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`,
       paidAmount: sql<number>`COALESCE(SUM(CASE WHEN status = 'paid' THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
       unpaidAmount: sql<number>`COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue') THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
-      lastDate: sql<string>`MAX(invoice_date)`
+      lastDate: sql<string>`MAX(created_at)`
     }).from(invoices).where(eq(invoices.representativeId, representativeId));
 
     // Real-time payment calculations

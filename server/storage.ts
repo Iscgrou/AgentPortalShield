@@ -1016,7 +1016,7 @@ export class DatabaseStorage implements IStorage {
   async getDashboardData() {
     return await withDatabaseRetry(async () => {
       // SHERLOCK v17.8 FINANCIAL INTEGRITY: Use standardized calculations
-      const { financialIntegrityEngine } = await import("./services/financial-integrity-engine");
+      const { unifiedFinancialEngine } = await import("./services/unified-financial-engine.js");
       
       // Calculate standardized total revenue = Sum of ALLOCATED payments only
       const [totalRevenueResult] = await db
@@ -1221,17 +1221,17 @@ export class DatabaseStorage implements IStorage {
     }, 'getDebtorRepresentatives');
   }
 
-  // SHERLOCK v17.8 - STANDARDIZED: Always use Financial Integrity Engine
+  // SHERLOCK v18.4 - STANDARDIZED: Always use UNIFIED Financial Engine
   async updateRepresentativeFinancials(repId: number): Promise<void> {
-    const { financialIntegrityEngine } = await import("./services/financial-integrity-engine");
+    const { unifiedFinancialEngine } = await import("./services/unified-financial-engine.js");
     return await withDatabaseRetry(
       async () => {
-        const result = await financialIntegrityEngine.reconcileRepresentativeFinancials(repId);
-        console.log(`💎 FINANCIAL INTEGRITY ENGINE: Standardized update for representative ${repId}:`, {
-          debt: result.changes.newDebt,
-          credit: result.changes.newCredit,
-          sales: result.changes.newTotalSales,
-          integrityScore: result.snapshot.integrityScore
+        const data = await unifiedFinancialEngine.calculateRepresentative(repId);
+        console.log(`💎 UNIFIED FINANCIAL ENGINE v18.4: Standardized update for representative ${repId}:`, {
+          debt: data.actualDebt,
+          totalSales: data.totalSales,
+          totalPaid: data.totalPaid,
+          debtLevel: data.debtLevel
         });
         return;
       },
@@ -2129,8 +2129,8 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  // SHERLOCK v17.8 - DEPRECATED: Use Financial Integrity Engine directly
-  // This method is now deprecated. Use: financialIntegrityEngine.reconcileRepresentativeFinancials()
+  // SHERLOCK v18.4 - DEPRECATED: Use UNIFIED Financial Engine directly  
+  // This method is now deprecated. Use: unifiedFinancialEngine.calculateRepresentative()
   // Kept for backward compatibility only
   async reconcileRepresentativeFinancials(representativeId: number): Promise<{
     previousDebt: string;
@@ -2139,20 +2139,18 @@ export class DatabaseStorage implements IStorage {
     totalPayments: string;
     difference: string;
   }> {
-    console.warn(`⚠️  DEPRECATED: reconcileRepresentativeFinancials() - Use Financial Integrity Engine directly`);
-    const { financialIntegrityEngine } = await import("./services/financial-integrity-engine");
+    console.warn(`⚠️  DEPRECATED: reconcileRepresentativeFinancials() - Use UNIFIED Financial Engine directly`);
+    const { unifiedFinancialEngine } = await import("./services/unified-financial-engine.js");
     return await withDatabaseRetry(
       async () => {
-        const result = await financialIntegrityEngine.reconcileRepresentativeFinancials(representativeId);
+        const data = await unifiedFinancialEngine.calculateRepresentative(representativeId);
         
         return {
-          previousDebt: result.changes.previousDebt,
-          newDebt: result.changes.newDebt,
-          totalSales: result.changes.newTotalSales,
-          totalPayments: result.snapshot.allocatedPaymentAmount.toString(),
-          difference: (
-            parseFloat(result.changes.newDebt) - parseFloat(result.changes.previousDebt)
-          ).toString()
+          previousDebt: "0", // Legacy compatibility
+          newDebt: data.actualDebt.toString(),
+          totalSales: data.totalSales.toString(),
+          totalPayments: data.totalPaid.toString(),
+          difference: "0" // Legacy compatibility
         };
       },
       'reconcileRepresentativeFinancials'
