@@ -1,0 +1,30 @@
+Questions for Replit AI Assistant
+Hello Replit Assistant! I need to understand in detail how you structure and recognize applications. I'm trying to transfer a project that was modified elsewhere back to Replit, but you're no longer recognizing the code properly. Please help me understand:
+
+Project Structure Questions
+What is the exact file and directory structure that you expect for different types of applications (Node.js, React, etc.)?
+Which files are mandatory for you to properly identify a project type?
+How does the .replit configuration file need to be structured? Can you provide a complete template?
+Are there specific naming conventions that must be followed for key files?
+Configuration Details
+What specific settings in the .replit file are critical for project recognition?
+How do you handle language detection? Is it solely based on the .replit file or do you also analyze file contents?
+What package manager configuration (package.json, etc.) do you expect to see?
+How do you handle custom build commands and environment variables?
+Framework Recognition
+How do you recognize specific frameworks like React, Express, or Next.js?
+Are there framework-specific files or patterns you look for?
+What dependencies need to be declared in what way for proper framework recognition?
+Import/Export and Module Systems
+Do you have specific expectations for how imports and exports are structured?
+How do you handle different module systems (CommonJS vs. ES Modules)?
+Are there import patterns that cause recognition problems?
+Development Environment
+What development server configurations do you expect?
+How should testing frameworks be configured to be compatible with your environment?
+What build tools and bundlers are properly recognized by your system?
+Migration Specifics
+What's the best approach when migrating a project from another platform to Replit?
+Are there any common pitfalls or incompatibilities to watch out for?
+Can you provide a step-by-step checklist for ensuring a project will be properly recognized?
+Understanding these details will help me structure my project correctly so you can recognize and properly assist with it. Thank you!
