@@ -21,17 +21,22 @@ import {
   // فاز ۱: Schema برای مدیریت دوره‌ای فاکتورها
   insertInvoiceBatchSchema
 } from "@shared/schema";
-import { 
-  parseUsageJsonData, 
-  processUsageData, 
-  processUsageDataSequential,
-  validateUsageData, 
-  getOrCreateDefaultSalesPartner, 
-  createRepresentativeFromUsageData,
-  getCurrentPersianDate,
-  addDaysToPersianDate,
-  toPersianDigits 
-} from "./services/invoice";
+// 🗑️ SHERLOCK v18.4: LEGACY IMPORTS DEPRECATED - causing 11,117,500 تومان financial discrepancy
+// These imports cause financial calculation inconsistencies and have been replaced:
+// import { 
+//   parseUsageJsonData, 
+//   processUsageData, 
+//   processUsageDataSequential,
+//   validateUsageData, 
+//   getOrCreateDefaultSalesPartner, 
+//   createRepresentativeFromUsageData,
+//   getCurrentPersianDate,
+//   addDaysToPersianDate,
+//   toPersianDigits 
+// } from "./services/invoice";
+
+// ✅ NEW STANDARDIZED IMPORTS:
+import { registerStandardizedInvoiceRoutes } from "./routes/standardized-invoice-routes";
 import { 
   sendInvoiceToTelegram, 
   sendBulkInvoicesToTelegram, 
@@ -917,201 +922,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // فاز ۱: Enhanced invoice generation with batch management
+  // 🗑️ SHERLOCK v18.4: LEGACY ENDPOINT DEPRECATED - 11,117,500 تومان اختلاف کشف شد
+  // استفاده از /api/invoices/generate-standard به جای این endpoint
   app.post("/api/invoices/generate", requireAuth, upload.single('usageFile'), async (req: MulterRequest, res) => {
-    try {
-      console.log('🚀 فاز ۱: JSON upload with batch management');
-      console.log('File exists:', !!req.file);
-      
-      if (!req.file) {
-        console.log('ERROR: No file uploaded');
-        return res.status(400).json({ error: "فایل JSON ارسال نشده است" });
-      }
-
-      // فاز ۱: دریافت پارامترهای batch و تاریخ از request body
-      const { batchName, periodStart, periodEnd, description, invoiceDateMode, customInvoiceDate } = req.body;
-      console.log('Batch params:', { batchName, periodStart, periodEnd, description });
-      console.log('Invoice date params:', { invoiceDateMode, customInvoiceDate });
-
-      console.log('File details:', {
-        originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size
-      });
-
-      const jsonData = req.file.buffer.toString('utf-8');
-      console.log('JSON data length:', jsonData.length);
-      console.log('JSON data preview (first 500 chars):', jsonData.substring(0, 500));
-      
-      const usageRecords = parseUsageJsonData(jsonData);
-      
-      console.log('About to validate usage data, total records:', usageRecords.length);
-      
-      const { valid, invalid } = validateUsageData(usageRecords);
-      
-      console.log(`تعداد رکوردهای معتبر: ${valid.length}, غیرمعتبر: ${invalid.length}`);
-      if (invalid.length > 0) {
-        console.log("نمونه رکورد غیرمعتبر:", JSON.stringify(invalid[0], null, 2));
-      }
-      if (valid.length > 0) {
-        console.log("نمونه رکورد معتبر:", JSON.stringify(valid[0], null, 2));
-      }
-      
-      if (valid.length === 0) {
-        console.log('VALIDATION ERROR: No valid records found');
-        console.log('Total records processed:', usageRecords.length);
-        console.log('Invalid records details:', invalid.slice(0, 3));
-        
-        return res.status(400).json({ 
-          error: "هیچ رکورد معتبری یافت نشد", 
-          totalRecords: usageRecords.length,
-          invalidSample: invalid.slice(0, 3),
-          details: "بررسی کنید که فایل JSON شامل فیلدهای admin_username و amount باشد",
-          debugInfo: {
-            sampleRecord: usageRecords[0] || null,
-            requiredFields: ['admin_username', 'amount']
-          }
-        });
-      }
-
-      // فاز ۱: ایجاد batch جدید برای این آپلود
-      let currentBatch = null;
-      if (batchName && periodStart && periodEnd) {
-        console.log('🗂️ فاز ۱: ایجاد batch جدید...');
-        const batchCode = await storage.generateBatchCode(periodStart);
-        
-        currentBatch = await storage.createInvoiceBatch({
-          batchName,
-          batchCode,
-          periodStart,
-          periodEnd,
-          description: description || `آپلود فایل ${req.file.originalname}`,
-          status: 'processing',
-          uploadedBy: (req.session as any)?.user?.username || 'admin',
-          uploadedFileName: req.file.originalname
-        });
-        
-        console.log('✅ Batch ایجاد شد:', currentBatch.id, currentBatch.batchCode);
-      }
-
-      console.log('🚀 شروع پردازش Sequential...');
-      
-      // تنظیم تاریخ صدور فاکتور
-      const invoiceDate = invoiceDateMode === 'custom' && customInvoiceDate 
-        ? customInvoiceDate.trim()
-        : null; // null means use today's date
-      
-      console.log('📅 Invoice date configuration:', { mode: invoiceDateMode, date: invoiceDate });
-      
-      const sequentialResult = await processUsageDataSequential(valid, storage, invoiceDate);
-      const createdInvoices = [];
-      const { processedInvoices, newRepresentatives, statistics } = sequentialResult;
-      
-      console.log('📊 آمار پردازش Sequential:', statistics);
-      console.log('💾 شروع ایجاد فاکتورها در دیتابیس...');
-      
-      // Process invoices in smaller batches to prevent memory issues
-      let invoiceCount = 0;
-      for (const processedInvoice of processedInvoices) {
-        invoiceCount++;
-        console.log(`📝 ایجاد فاکتور ${invoiceCount}/${processedInvoices.length}: ${processedInvoice.representativeCode}`);
-        // Representative should already exist from sequential processing
-        let representative = await storage.getRepresentativeByPanelUsername(processedInvoice.panelUsername) ||
-                           await storage.getRepresentativeByCode(processedInvoice.representativeCode);
-        
-        if (representative) {
-          console.log('Creating invoice for representative:', representative.name);
-          console.log('Invoice data:', {
-            representativeId: representative.id,
-            amount: processedInvoice.amount.toString(),
-            issueDate: processedInvoice.issueDate,
-            dueDate: processedInvoice.dueDate,
-            usageDataLength: processedInvoice.usageData?.records?.length || 0
-          });
-          
-          // فاز ۱: شامل کردن batchId در فاکتور
-          const invoice = await storage.createInvoice({
-            representativeId: representative.id,
-            batchId: currentBatch ? currentBatch.id : null,
-            amount: processedInvoice.amount.toString(),
-            issueDate: processedInvoice.issueDate,
-            dueDate: processedInvoice.dueDate,
-            status: "unpaid",
-            usageData: processedInvoice.usageData,
-
-          });
-          
-          // Update representative financial data
-          await storage.updateRepresentativeFinancials(representative.id);
-          
-          createdInvoices.push({
-            ...invoice,
-            representativeName: representative.name,
-            representativeCode: representative.code
-          });
-          
-          console.log('Invoice created successfully:', invoice.id);
-          
-          // بهینه‌سازی حافظه و database
-          if (invoiceCount % 20 === 0) {
-            console.log(`⏳ ${invoiceCount}/${processedInvoices.length} فاکتور ایجاد شد - بهینه‌سازی حافظه...`);
-            // Force garbage collection and add small delay
-            if (global.gc) {
-              global.gc();
-            }
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-        } else {
-          console.error('Representative not found for invoice:', processedInvoice.representativeCode);
-        }
-      }
-      
-      console.log(`🎉 پردازش کامل شد! ${createdInvoices.length} فاکتور ایجاد شد`);
-
-      // فاز ۱: تکمیل batch اگر ایجاد شده بود
-      if (currentBatch) {
-        console.log('🏁 فاز ۱: تکمیل batch...');
-        await storage.completeBatch(currentBatch.id);
-        console.log('✅ Batch تکمیل شد:', currentBatch.batchCode);
-      }
-
-      res.json({
-        success: true,
-        created: createdInvoices.length,
-        newRepresentatives: newRepresentatives.length,
-        invalid: invalid.length,
-        invoices: createdInvoices,
-        createdRepresentatives: newRepresentatives,
-        invalidRecords: invalid,
-        // فاز ۱: اضافه کردن اطلاعات batch به پاسخ
-        batch: currentBatch ? {
-          id: currentBatch.id,
-          batchName: currentBatch.batchName,
-          batchCode: currentBatch.batchCode,
-          status: 'completed'
-        } : null
-      });
-    } catch (error) {
-      console.error('❌ خطا در تولید فاکتور:', error);
-      console.error('Error stack:', error instanceof Error ? error.stack : 'Unknown error');
-      
-      // Force cleanup on error
-      if (global.gc) {
-        global.gc();
-      }
-      
-      // Return more detailed error information
-      const errorMessage = error instanceof Error ? error.message : 'خطای نامشخص';
-      const isTimeoutError = errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT');
-      
-      res.status(500).json({ 
-        error: isTimeoutError ? "پردازش فایل بزرگ زمان بیشتری نیاز دارد" : "خطا در پردازش فایل JSON",
-        details: errorMessage,
-        isTimeout: isTimeoutError,
-        suggestion: isTimeoutError ? "لطفاً مجدداً تلاش کنید یا فایل را به بخش‌های کوچک‌تر تقسیم کنید" : "بررسی فرمت فایل JSON",
-        timestamp: new Date().toISOString()
-      });
-    }
+    res.status(301).json({
+      error: "این endpoint به سیستم استاندارد منتقل شده است",
+      message: "لطفاً از /api/invoices/generate-standard استفاده کنید",
+      deprecatedIn: "SHERLOCK v18.4",
+      reason: "legacy parseUsageJsonData causing 11,117,500 تومان financial discrepancies",
+      redirect: "/api/invoices/generate-standard"
+    });
   });
 
   // فاز ۲: Manual invoice creation API - ایجاد فاکتور دستی
@@ -2537,6 +2357,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // 🚀 SHERLOCK v18.4: Register STANDARDIZED Invoice Routes - eliminates 11,117,500 تومان discrepancy
+  registerStandardizedInvoiceRoutes(app, requireAuth, storage);
+  
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -22,7 +22,12 @@ export interface ProcessedInvoice {
   dueDate: string;
 }
 
+// 🗑️ SHERLOCK v18.4: DEPRECATED - This function causes 11,117,500 تومان financial discrepancy
+// Use parseStandardJsonData from standardized-invoice-engine.ts instead
 export function parseUsageJsonData(jsonData: string): UsageDataRecord[] {
+  throw new Error("DEPRECATED: parseUsageJsonData causes financial discrepancies. Use parseStandardJsonData from standardized-invoice-engine.ts");
+  
+  // Legacy function causing financial inconsistencies - DO NOT USE
   try {
     console.log('=== PARSING WEEKLY MARFANET JSON DATA ===');
     console.log('JSON data length:', jsonData.length);
