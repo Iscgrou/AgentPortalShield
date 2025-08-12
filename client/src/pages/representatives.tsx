@@ -89,14 +89,7 @@ interface Representative {
   updatedAt: string;
 }
 
-interface RepresentativeStats {
-  totalCount: number;
-  activeCount: number;
-  inactiveCount: number;
-  totalSales: number;
-  totalDebt: number;
-  avgPerformance: number;
-}
+
 
 interface RepresentativeWithDetails extends Representative {
   invoices?: Invoice[];
@@ -183,19 +176,7 @@ export default function Representatives() {
     }
   });
 
-  const { data: stats } = useQuery<RepresentativeStats>({
-    queryKey: ["/api/unified-statistics/representatives"],
-    select: (data: any) => {
-      return data?.data || {
-        totalCount: 0,
-        activeCount: 0,
-        inactiveCount: 0,
-        totalSales: 0,
-        totalDebt: 0,
-        avgPerformance: 0
-      };
-    }
-  });
+
 
   // SHERLOCK v11.0: Enhanced filtering and sorting
   const filteredRepresentatives = representatives
@@ -295,7 +276,6 @@ export default function Representatives() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       toast({
         title: "موفقیت",
         description: "نماینده جدید با موفقیت ایجاد شد"
@@ -321,7 +301,6 @@ export default function Representatives() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       toast({
         title: "موفقیت",
         description: "اطلاعات نماینده بروزرسانی شد"
@@ -440,7 +419,6 @@ export default function Representatives() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       toast({
@@ -500,80 +478,7 @@ export default function Representatives() {
         </Button>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  کل نمایندگان
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {toPersianDigits(stats?.totalCount.toString() || "0")}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  نمایندگان فعال
-                </p>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {toPersianDigits(stats?.activeCount.toString() || "0")}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  کل فروش
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatCurrency(stats?.totalSales || 0)}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  کل بدهی
-                </p>
-                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                  {formatCurrency(stats?.totalDebt || 0)}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-red-600 dark:text-red-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Filters */}
       <Card>

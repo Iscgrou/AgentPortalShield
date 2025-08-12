@@ -3,8 +3,7 @@ import {
   TrendingUp, 
   AlertTriangle, 
   Users, 
-  FileText, 
-  Activity,
+  FileText,
   Upload,
   Bot
 } from "lucide-react";
@@ -195,44 +194,9 @@ export default function Dashboard() {
           <InvoiceUpload />
         </div>
 
-        {/* SHERLOCK v18.0: System Health Overview */}
+        {/* Placeholder for future widgets */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Activity className="w-5 h-5 ml-2" />
-                وضعیت سلامت سیستم
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">امتیاز یکپارچگی:</span>
-                  <Badge variant={dashboardData.systemIntegrityScore >= 90 ? "default" : "destructive"}>
-                    {toPersianDigits(dashboardData.systemIntegrityScore.toString())}%
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">نمایندگان مشکل‌دار:</span>
-                  <span className="text-sm font-medium">
-                    {toPersianDigits(dashboardData.problematicRepresentativesCount.toString())}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">زمان پاسخ آمار:</span>
-                  <span className="text-sm font-medium text-green-600">
-                    {toPersianDigits(dashboardData.responseTime.toString())}ms
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">وضعیت Cache:</span>
-                  <Badge variant="outline">
-                    {dashboardData.cacheStatus === 'FRESH' ? 'بروز' : 'Cache'}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Future dashboard widgets can be added here */}
         </div>
       </div>
 
