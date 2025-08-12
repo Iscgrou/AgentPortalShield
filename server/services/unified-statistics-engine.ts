@@ -19,6 +19,7 @@ import { financialIntegrityEngine } from "./financial-integrity-engine";
 
 export interface GlobalStatistics {
   // Financial Overview
+  totalSales: number;
   totalRevenue: number;
   totalDebt: number;
   totalCredit: number;
@@ -123,6 +124,7 @@ export class UnifiedStatisticsEngine {
 
     const globalStats: GlobalStatistics = {
       // Financial
+      totalSales: representativeStats.totalSales,
       totalRevenue: financialOverview.totalRevenue,
       totalDebt: financialOverview.totalDebt,
       totalCredit: financialOverview.totalCredit,
@@ -310,12 +312,17 @@ export class UnifiedStatisticsEngine {
       }).from(representatives)
     ]);
 
+    console.log('Representative Overview Debug:', {
+      countStats: countStats[0],
+      financialStats: financialStats[0]
+    });
+
     return {
       totalCount: countStats[0].totalCount,
       activeCount: countStats[0].activeCount,
       inactiveCount: countStats[0].inactiveCount,
-      totalSales: financialStats[0].totalSales,
-      totalDebt: financialStats[0].totalDebt,
+      totalSales: parseFloat(financialStats[0].totalSales?.toString() || '0'),
+      totalDebt: parseFloat(financialStats[0].totalDebt?.toString() || '0'),
       riskCount: financialStats[0].riskCount
     };
   }
