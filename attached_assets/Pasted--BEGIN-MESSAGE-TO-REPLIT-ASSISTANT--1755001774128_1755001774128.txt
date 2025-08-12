@@ -1,0 +1,42 @@
+===== BEGIN MESSAGE TO REPLIT ASSISTANT ===== لطفاً پاسخ قبلی را با فرمت دقیق‌تر و قابل اتکای فنی اصلاح کن. چند بخش از پاسخ قبلی یا مبهم بود یا با واقعیت Replit/TOML ناسازگار. لطفاً فقط داده معتبر، بدون حدس و بدون مقدار ساختگی ارائه بده. اگر پاسخی را نمی‌توانی قطعی تأیید کنی، مقدار آن را null و فیلد explanation را اضافه کن.
+
+Provide a single consolidated JSON object with these top-level keys in EXACT order: { "detectionSummary": {...}, "signals": {...}, "configValidation": {...}, "frameworkRecognition": {...}, "limits": {...}, "dynamicImport": {...}, "drizzleRole": {...}, "missingSignals": [...], "blockers": [...], "recommendations": {...}, "minimalPatch": {...}, "confidence": {...}, "meta": {...} }
+
+detectionSummary:
+
+fields: { pipelineStages: [ {name, weight, description} ], overallStatus: "full" | "limited" | "none", reasoning }
+signals: { "required": { ".replit": { "present": true|false, "issues": [] }, "package.json": {...}, "serverIndex": {"pathsTried": ["server/index.ts","server/index.js"], "found": "..."}, "clientHtml": {"pathsTried":["client/index.html","index.html"], "found": "..."} }, "optional": { "drizzleConfig": {"found": true|false}, "viteConfig": {"staticReactPluginImport": true|false}, "tsconfig": {"pathsAligned": true|false} } }
+
+configValidation:
+
+Validate actual TOML grammar expectations for .replit (list allowed top-level keys, whether ordering enforced = true|false).
+Clarify: Are modules allowed to contain plugin package names? (Expecting: false)
+Clarify: Does hidden placement matter? true|false + explanation
+Clarify: Does deploymentTarget influence AI features? true|false + explanation
+frameworkRecognition: { "express": {detected: bool, method: "dependency|code|both"}, "react": {...}, "vite": {...}, "typescript": {...}, "drizzle": {...} }
+
+limits: If no hard limit, set value to null and add explanation. { "maxFileLines": {"value": number|null, "explanation": "..."}, "maxRouteFileLines": {"value": number|null, "explanation": "..."}, "maxBundleKB": {"value": number|null, "explanation": "..."} }
+
+dynamicImport: { "vitePluginsDynamicImportSupported": true|false|null, "impactDescription": "...", "actionNeeded": true|false }
+
+drizzleRole: { "requiredForDetection": true|false, "benefits": ["..."], "irrelevantAspects": ["..."] }
+
+missingSignals: array of machine-friendly codes (e.g., ["NO_VITE_PLUGIN_STATIC_IMPORT"]). If none: [].
+
+blockers: array of objects: [ {"code":"...", "severity":"high|medium|low", "description":"...", "remediation":"..."} ]
+
+recommendations: { "high": ["..."], "medium": ["..."], "low": ["..."] }
+
+minimalPatch: Provide either: { "needed": false, "reason": "All required signals present" } OR if needed: { "needed": true, "patchFormat": "unified-diff", "files": [ { "path": ".replit", "diff": "@@ ... (valid TOML diff) ..." } ] }
+
+confidence: { "express": 0-1, "react": 0-1, "vite": 0-1, "typescript": 0-1, "drizzle": 0-1, "overall": 0-1 }
+
+meta: { "version": "schema-v1", "generatedAt": "ISO-8601", "disclaimer": "Only validated fields included" }
+
+Constraints & Clarifications Still Needed (answer yes/no or short): A) Does static import of @vitejs/plugin-react improve reliability vs dynamic import? (yes/no) B) Does having PORT in [env] degrade detection? (yes/no) C) Is splitting large routes file mandatory for full support? (yes/no) D) Do workflows names require exact canonical names? (yes/no) E) Are there ANY ordering constraints on .replit keys? (yes/no) F) Is deploymentTarget completely ignored by detection? (yes/no)
+
+If you cannot validate a point, answer null with explanation.
+
+Return ONLY the JSON plus (optionally) a very short one-line human note in Persian after it. No extra prose.
+
+===== END MESSAGE TO REPLIT ASSISTANT =====
