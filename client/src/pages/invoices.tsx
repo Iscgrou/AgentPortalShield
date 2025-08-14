@@ -78,7 +78,6 @@ export default function Invoices() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(30);
-  const [paginationInfo, setPaginationInfo] = useState<any>(null); // State to store pagination info
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -108,17 +107,12 @@ export default function Invoices() {
       console.log('SHERLOCK v12.1 DEBUG: Raw data from API:', data);
       // Handle both array response and paginated response
       if (Array.isArray(data)) {
-        setPaginationInfo({ totalPages: 1, totalCount: data.length }); // Assume single page if array
         return { data: data, pagination: { totalPages: 1, totalCount: data.length } };
       }
       if (data && data.data && Array.isArray(data.data)) {
-        if (data.pagination) {
-          setPaginationInfo(data.pagination);
-        }
         return data;
       }
       console.warn('⚠️ Unexpected invoices data structure:', data);
-      setPaginationInfo({ totalPages: 0, totalCount: 0 }); // Reset pagination on unexpected data
       return { data: [], pagination: { totalPages: 0, totalCount: 0 } };
     },
     retry: 3,
@@ -134,7 +128,7 @@ export default function Invoices() {
   });
 
   const invoices = invoicesResponse?.data || [];
-  const pagination = invoicesResponse?.pagination || paginationInfo; // Use fetched or stored pagination
+  const pagination = invoicesResponse?.pagination || { totalPages: 0, totalCount: 0 };
 
   console.log('SHERLOCK v12.1 DEBUG: Final invoices count:', invoices?.length || 0);
   console.log('SHERLOCK v12.1 DEBUG: isLoading:', isLoading);
@@ -176,7 +170,7 @@ export default function Invoices() {
   const paginatedInvoices = filteredInvoices;
 
   // Use backend pagination info
-  const totalPages = pagination?.totalPages || Math.ceil(filteredInvoices.length / pageSize);
+  const totalPages = pagination?.totalPages || 1;
   const totalCount = pagination?.totalCount || filteredInvoices.length;
 
   // SHERLOCK v12.2: Use total statistics for widgets, not just current page  
@@ -185,15 +179,11 @@ export default function Invoices() {
     enabled: true // Ensure this query runs
   });
 
-  // Reset to first page when filters change and invalidate cache
+  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
     setSelectedInvoices([]);
-    // Invalidate queries to force new data fetch with updated filters
-    queryClient.invalidateQueries({
-      queryKey: ["/api/invoices/with-batch-info"]
-    });
-  }, [searchTerm, statusFilter, telegramFilter, queryClient]);
+  }, [searchTerm, statusFilter, telegramFilter]);
 
   const handleSelectAll = () => {
     const currentPageInvoiceIds = paginatedInvoices.map((inv: Invoice) => inv.id);
@@ -261,26 +251,15 @@ export default function Invoices() {
   };
 
   // SHERLOCK v12.2: Use total statistics for widgets, not just current page  
-  const stats = totalStats ? {
-    total: totalStats.totalInvoices || 0,
-    unpaid: totalStats.unpaidCount || 0,
-    paid: totalStats.paidCount || 0,
-    partial: totalStats.partialCount || 0,
-    overdue: totalStats.overdueCount || 0,
-    totalAmount: totalStats.totalAmount || 0,
-    // SHERLOCK v12.2: Use total telegram stats from API
-    sentToTelegram: totalStats.sentToTelegramCount || 0,
-    unsentToTelegram: totalStats.unsentToTelegramCount || 0
-  } : {
-    // Fallback if totalStats is not yet loaded or undefined
-    total: filteredInvoices.length,
-    unpaid: filteredInvoices.filter((inv: Invoice) => inv.status === 'unpaid').length,
-    paid: filteredInvoices.filter((inv: Invoice) => inv.status === 'paid').length,
-    partial: filteredInvoices.filter((inv: Invoice) => inv.status === 'partial').length,
-    overdue: filteredInvoices.filter((inv: Invoice) => inv.status === 'overdue').length,
-    totalAmount: filteredInvoices.reduce((sum: number, inv: Invoice) => sum + parseFloat(inv.amount || '0'), 0),
-    sentToTelegram: filteredInvoices.filter((inv: Invoice) => inv.sentToTelegram).length,
-    unsentToTelegram: filteredInvoices.filter((inv: Invoice) => !inv.sentToTelegram).length
+  const stats = totalStats || {
+    total: 0,
+    unpaid: 0,
+    paid: 0,
+    partial: 0,
+    overdue: 0,
+    totalAmount: 0,
+    sentToTelegram: 0,
+    unsentToTelegram: 0
   };
 
 
