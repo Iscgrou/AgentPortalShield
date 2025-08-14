@@ -44,6 +44,7 @@ interface AuthContextType {
   hasPermission: (resource: string, action: string) => boolean;
   isAdmin: boolean;
   isCrm: boolean;
+  checkAuth: () => void;
 }
 
 export const CrmAuthContext = createContext<AuthContextType | null>(null);
@@ -60,26 +61,23 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
     queryKey: ["/api/crm/auth/user"],
     queryFn: async () => {
       try {
-        const result = await apiRequest("/api/crm/auth/user", { 
-          method: "GET",
-          credentials: 'include' // SHERLOCK v2.0 - Critical: Ensure cookies are sent
-        });
-        console.log('CRM Auth Check Result:', result); // Debug logging
-        return result || null; // Ensure we never return undefined
+        const result = await apiRequest("/api/crm/auth/user");
+        return result || null;
       } catch (error: any) {
-        console.log('CRM Auth Check Error:', error); // Debug logging
         if (error.message?.includes('401') || error.status === 401) {
-          return null; // Not authenticated - return null instead of undefined
+          return null; // Not authenticated
         }
         throw error;
       }
     },
     retry: false,
-    staleTime: 0, // No caching - always check authentication
-    placeholderData: null, // Use null as placeholder 
-    refetchOnWindowFocus: true, // Always recheck when window gets focus
-    refetchOnMount: true, // Always check on mount
-    refetchInterval: false // Don't auto-refetch in background
+    enabled: false, // Disable automatic queries - only fetch when explicitly requested
+    staleTime: Infinity, // Never automatically mark as stale
+    gcTime: Infinity, // Keep cached indefinitely
+    placeholderData: null,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchInterval: false
   });
 
   const loginMutation = useMutation({
@@ -87,8 +85,7 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       console.log('CRM Login Request:', credentials);
       const result = await apiRequest("/api/crm/auth/login", { 
         method: "POST", 
-        data: credentials,
-        credentials: 'include' // SHERLOCK v2.0 - Ensure cookies are set
+        data: credentials
       });
       console.log('CRM Login Success Response:', result);
       return result;
@@ -159,6 +156,14 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.role === 'ADMIN';
   const isCrm = user?.role === 'CRM' || user?.role === 'CRM_MANAGER';
 
+  // Manually check auth when needed (since enabled: false)
+  const checkAuth = () => {
+    if (!isLoading) {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/auth/user"] });
+      queryClient.refetchQueries({ queryKey: ["/api/crm/auth/user"] });
+    }
+  };
+
   return (
     <CrmAuthContext.Provider
       value={{
@@ -169,7 +174,8 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
         logoutMutation,
         hasPermission,
         isAdmin,
-        isCrm
+        isCrm,
+        checkAuth
       }}
     >
       {children}

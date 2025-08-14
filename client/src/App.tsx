@@ -41,13 +41,10 @@ function CrmProtectedRoutes() {
   const { user, isLoading } = useCrmAuth();
   const [, setLocation] = useLocation();
 
-  // FORCE LOGIN EVERY TIME - No auto-authentication
+  // Check authentication but don't create infinite loops
   useEffect(() => {
     if (!isLoading && !user) {
-      console.log('CRM Authentication required, redirecting to login...');
-      setLocation('/'); // Always redirect to login page
-    } else if (user) {
-      console.log('CRM User authenticated:', user);
+      setLocation('/'); // Redirect to unified auth
     }
   }, [user, isLoading, setLocation]);
 
@@ -109,41 +106,34 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 }
 
 function AuthenticatedRouter() {
-  // Check authentication status
+  // Check authentication status with better caching
   const { data: authStatus, isLoading: authLoading, error: authError } = useQuery({
     queryKey: ['auth-status'],
     queryFn: async () => {
       try {
         const response = await fetch('/api/auth/check', { credentials: 'include' });
-        console.log('Auth check response status:', response.status);
-
+        
         if (!response.ok) {
-          console.error('Auth check failed:', response.status);
           return { authenticated: false };
         }
 
         const data = await response.json();
-        console.log('Auth status:', data);
         return data;
       } catch (error) {
-        console.error('Auth check error:', error);
         return { authenticated: false };
       }
     },
-    retry: 1,
-    retryDelay: 1000,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: false, // Don't retry on failure to prevent loops
+    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+    gcTime: 15 * 60 * 1000, // Keep cached for 15 minutes
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
+    refetchOnMount: false, // Only refetch when explicitly invalidated
+    refetchInterval: false
   });
 
   const isAuthenticated = authStatus?.authenticated === true;
 
-  // Log authentication status for debugging
-  console.log('Authentication Status:', {
-    isAuthenticated,
-    authLoading,
-    authError,
-    authStatus
-  });
+  // Removed excessive logging to reduce console noise
 
   const { isAuthenticated: adminAuthenticated, isLoading: adminIsLoading } = useAuth();
   const [location] = useLocation();

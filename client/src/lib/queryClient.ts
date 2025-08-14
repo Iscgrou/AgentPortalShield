@@ -39,11 +39,10 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}): 
       const errorText = await response.text();
       console.error(`API Error (${response.status}) for ${url}:`, errorText);
 
-      // Handle authentication errors
+      // Handle authentication errors - don't redirect automatically
       if (response.status === 401) {
-        console.error('Authentication failed - redirecting to login');
-        window.location.href = '/login';
-        return null;
+        console.log('Auth check failed:', response.status);
+        // Let the calling component handle 401 errors appropriately
       }
 
       throw new Error(`HTTP ${response.status}: ${errorText || 'Network Error'}`);
