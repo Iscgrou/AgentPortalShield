@@ -27,17 +27,19 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CrmUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const authChecked = useRef(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const checkingAuth = useRef(false);
 
   const checkAuth = useCallback(async () => {
-    if (authChecked.current || checkingAuth.current) {
+    if (authChecked || checkingAuth.current) {
+      console.log('🔒 CRM Auth: Skipping duplicate check');
       return;
     }
 
     checkingAuth.current = true;
 
     try {
+      setIsLoading(true);
       const response = await apiRequest('/api/crm/auth/user');
 
       if (response && (response.id || response.user)) {
@@ -48,20 +50,18 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUser(null);
         setIsAuthenticated(false);
+        console.log('❌ CRM Auth Failed: No user data');
       }
     } catch (error: any) {
+      console.log('❌ CRM Auth Failed:', error.message);
       setUser(null);
       setIsAuthenticated(false);
-      // حذف لاگ خطا برای جلوگیری از spam console
-      if (error.status !== 401) {
-        console.log('❌ CRM Auth Failed:', error.message);
-      }
     } finally {
       setIsLoading(false);
-      authChecked.current = true;
+      setAuthChecked(true);
       checkingAuth.current = false;
     }
-  }, []);
+  }, [authChecked]);
 
   // Login mutation
   const loginMutation = useMutation({
@@ -78,7 +78,7 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       if (data.user) {
         setUser(data.user);
         setIsAuthenticated(true);
-        authChecked.current = true;
+        setAuthChecked(true);
       }
     },
     onError: (error: any) => {
@@ -97,17 +97,17 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       console.log('✅ CRM Logout Success');
       setUser(null);
       setIsAuthenticated(false);
-      authChecked.current = false;
+      setAuthChecked(false);
     }
   });
 
-  // تنها یک بار در ابتدا auth check انجام شود
+  // Single auth check on mount only
   useEffect(() => {
-    if (!authChecked.current && !checkingAuth.current) {
+    if (!authChecked && !checkingAuth.current) {
       console.log('🔍 CRM Auth: Initial check');
       checkAuth();
     }
-  }, [checkAuth]);
+  }, []); // Empty dependency array - run only once
 
   return (
     <CrmAuthContext.Provider
