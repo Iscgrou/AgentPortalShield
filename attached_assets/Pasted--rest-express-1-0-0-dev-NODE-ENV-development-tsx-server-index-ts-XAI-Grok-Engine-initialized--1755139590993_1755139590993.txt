@@ -1,0 +1,73 @@
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+✅ XAI Grok Engine initialized successfully
+2:43:21 AM [express] Checking database connection...
+2:43:21 AM [database] Database connection successful
+Query: select "id", "username", "password_hash", "role", "permissions", "is_active", "last_login_at", "created_at" from "admin_users" where "admin_users"."username" = $1 -- params: ["mgr"]
+Query: select "id", "username", "password_hash", "full_name", "email", "role", "permissions", "is_active", "last_login_at", "created_at", "updated_at" from "crm_users" where "crm_users"."username" = $1 -- params: ["crm"]
+✅ XAI Grok Engine initialized successfully
+✅ Settings routes registered successfully
+✅ Standardized Invoice Routes Registered
+✅ Maintenance routes registered successfully
+2:43:21 AM [express] serving on port 5000
+2:43:21 AM [express] Environment: development
+2:43:21 AM [express] Health check available at /health
+Browserslist: browsers data (caniuse-lite) is 10 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Memory usage: { rss: 243.43, heapTotal: 110.5, heapUsed: 107.27, external: 9.88 }
+Memory usage: { rss: 243.68, heapTotal: 110.5, heapUsed: 107.52, external: 9.94 }
+2:45:46 AM [vite] hmr update /src/pages/representatives.tsx, /src/index.css?v=01P41gMQP6yrcTMGinWJl
+2:45:46 AM [vite] hmr update /src/pages/sales-partners.tsx, /src/index.css?v=01P41gMQP6yrcTMGinWJl
+2:45:47 AM [vite] hmr update /src/pages/invoices.tsx, /src/index.css?v=01P41gMQP6yrcTMGinWJl
+2:45:47 AM [vite] hmr update /src/components/debtor-representatives-card.tsx, /src/index.css?v=01P41gMQP6yrcTMGinWJl
+2:45:48 AM [vite] hmr update /src/App.tsx?v=01P41gMQP6yrcTMGinWJl, /src/index.css?v=01P41gMQP6yrcTMGinWJl
+2:45:48 AM [vite] hmr update /src/App.tsx?v=01P41gMQP6yrcTMGinWJl, /src/index.css?v=01P41gMQP6yrcTMGinWJl, /src/hooks/use-crm-auth.tsx, /src/contexts/auth-context.tsx, /src/pages/InvoiceManagement.tsx, /src/pages/invoices.tsx, /src/pages/sales-partners.tsx, /src/pages/settings.tsx, /src/pages/representatives.tsx, /src/components/invoice-upload.tsx, /src/components/InvoiceManualForm.tsx, /src/components/financial-integrity-dashboard.tsx
+2:45:49 AM [vite] page reload src/main.tsx
+2:45:50 AM [vite] Pre-transform error: /home/runner/workspace/client/src/pages/sales-partners.tsx: Identifier 'useQuery' has already been declared. (10:9)
+
+   8 | import { apiRequest } from '@/lib/queryClient';
+   9 | import { useToast } from '@/hooks/use-toast';
+> 10 | import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+     |          ^
+  11 | import { 
+  12 |   Handshake, 
+  13 |   Search, 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
