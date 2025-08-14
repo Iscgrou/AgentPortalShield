@@ -192,7 +192,7 @@ export default function DebtorRepresentativesCard() {
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {debtorData.slice(0, 10).map((debtor: any, index: number) => (
               <DebtorRepresentativeRow
-                key={`debtor-${debtor.representativeId || debtor.id}-${Date.now()}`}
+                key={`debtor-${debtor.representativeId || debtor.id}-${debtor.remainingDebt || 0}`}
                 representative={debtor}
               />
             ))}

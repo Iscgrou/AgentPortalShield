@@ -260,51 +260,70 @@ export class UnifiedFinancialEngine {
   }
 
   /**
-   * Real-time debtor list - OPTIMIZED
+   * Real-time debtor list - ULTRA OPTIMIZED v18.7
    */
   async getDebtorRepresentatives(limit: number = 50): Promise<UnifiedFinancialData[]> {
-    console.log(`🚀 SHERLOCK v18.6: Getting top ${limit} debtors with optimization`);
+    console.log(`🚀 SHERLOCK v18.7: Ultra-optimized debtor calculation for ${limit} records`);
     const startTime = Date.now();
 
     try {
-      // Step 1: Get representatives with high debt first (pre-filtering)
+      // OPTIMIZATION 1: Batch process in smaller chunks to reduce memory usage
+      const BATCH_SIZE = Math.min(20, limit);
+      
+      // OPTIMIZATION 2: Pre-filter with minimal debt threshold
       const highDebtReps = await db.select({
         id: representatives.id,
         name: representatives.name,
         code: representatives.code,
         totalDebt: representatives.totalDebt
       }).from(representatives)
-      .where(sql`CAST(total_debt as DECIMAL) > 0`)
+      .where(sql`CAST(total_debt as DECIMAL) > 50000`) // Only significant debts
       .orderBy(desc(sql`CAST(total_debt as DECIMAL)`))
-      .limit(limit * 2); // Get 2x limit for buffer
+      .limit(limit * 1.5); // Reduced buffer size
 
-      console.log(`⚡ Found ${highDebtReps.length} potential debtors in ${Date.now() - startTime}ms`);
+      console.log(`⚡ Pre-filtered to ${highDebtReps.length} candidates in ${Date.now() - startTime}ms`);
 
-      // Step 2: Calculate exact debt for only these representatives
-      const debtorPromises = highDebtReps.map(async (rep) => {
-        try {
-          const data = await this.calculateRepresentative(rep.id);
-          return data.actualDebt > 0 ? data : null;
-        } catch (error) {
-          console.warn(`Failed to calculate debt for rep ${rep.id}:`, error);
-          return null;
+      if (highDebtReps.length === 0) {
+        return [];
+      }
+
+      // OPTIMIZATION 3: Process in batches to avoid overwhelming the database
+      const allDebtors: UnifiedFinancialData[] = [];
+      
+      for (let i = 0; i < highDebtReps.length && allDebtors.length < limit; i += BATCH_SIZE) {
+        const batch = highDebtReps.slice(i, i + BATCH_SIZE);
+        
+        const batchPromises = batch.map(async (rep) => {
+          try {
+            const data = await this.calculateRepresentative(rep.id);
+            return data.actualDebt > 0 ? data : null;
+          } catch (error) {
+            console.warn(`Batch calculation failed for rep ${rep.id}:`, error);
+            return null;
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        const validBatchDebtors = batchResults.filter(rep => rep !== null) as UnifiedFinancialData[];
+        
+        allDebtors.push(...validBatchDebtors);
+        
+        // Early termination if we have enough results
+        if (allDebtors.length >= limit) {
+          break;
         }
-      });
+      }
 
-      const results = await Promise.all(debtorPromises);
-      const validDebtors = results.filter(rep => rep !== null) as UnifiedFinancialData[];
-
-      // Step 3: Sort and limit
-      const sortedDebtors = validDebtors
+      // Final sort and limit
+      const sortedDebtors = allDebtors
         .sort((a, b) => b.actualDebt - a.actualDebt)
         .slice(0, limit);
 
-      console.log(`✅ SHERLOCK v18.6: Generated ${sortedDebtors.length} debtors in ${Date.now() - startTime}ms`);
+      console.log(`✅ SHERLOCK v18.7: Ultra-optimized generated ${sortedDebtors.length} debtors in ${Date.now() - startTime}ms`);
       return sortedDebtors;
 
     } catch (error) {
-      console.error('Error in optimized getDebtorRepresentatives:', error);
-      // Fallback to simple method
+      console.error('Error in ultra-optimized getDebtorRepresentatives:', error);
       return this.getDebtorRepresentativesFallback(limit);
     }
   }

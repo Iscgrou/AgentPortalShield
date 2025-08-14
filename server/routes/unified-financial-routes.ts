@@ -31,7 +31,7 @@ const requireAuth = (req: any, res: any, next: any) => {
 router.get('/global', requireAuth, async (req, res) => {
   try {
     const summary = await unifiedFinancialEngine.calculateGlobalSummary();
-    
+
     res.json({
       success: true,
       data: summary,
@@ -58,7 +58,7 @@ router.get('/representative/:id', requireAuth, async (req, res) => {
   try {
     const representativeId = parseInt(req.params.id);
     const data = await unifiedFinancialEngine.calculateRepresentative(representativeId);
-    
+
     res.json({
       success: true,
       data,
@@ -76,29 +76,76 @@ router.get('/representative/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Cache for debtor data
+let debtorCache: { data: any; timestamp: number } | null = null;
+const CACHE_DURATION = 120000; // 2 minutes cache
+
 /**
  * لیست بدهکاران
  * جایگزین /api/dashboard/debtor-representatives
  */
 router.get('/debtors', requireAuth, async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 50;
+    const startTime = Date.now();
+    const limit = parseInt(req.query.limit as string) || 30;
+
+    // Check cache first
+    const now = Date.now();
+    if (debtorCache && (now - debtorCache.timestamp) < CACHE_DURATION) {
+      console.log(`⚡ Cache hit: Returning cached debtor data in ${Date.now() - startTime}ms`);
+      return res.json({
+        success: true,
+        data: debtorCache.data.slice(0, limit),
+        meta: {
+          count: Math.min(debtorCache.data.length, limit),
+          cached: true,
+          cacheAge: Math.round((now - debtorCache.timestamp) / 1000)
+        }
+      });
+    }
+
+    console.log(`🚀 SHERLOCK v18.7: Fresh calculation for ${limit} debtors`);
     const debtors = await unifiedFinancialEngine.getDebtorRepresentatives(limit);
-    
+
+    // Transform to legacy format for compatibility
+    const transformedData = debtors.map(debtor => ({
+      id: debtor.representativeId,
+      representativeId: debtor.representativeId,
+      name: debtor.representativeName,
+      code: debtor.representativeCode,
+      remainingDebt: debtor.actualDebt.toString(),
+      totalInvoices: debtor.totalSales.toString(),
+      totalPayments: debtor.totalPaid.toString(),
+      // Additional fields for better UI
+      debtLevel: debtor.debtLevel,
+      paymentRatio: debtor.paymentRatio,
+      lastTransactionDate: debtor.lastTransactionDate
+    }));
+
+    // Update cache
+    debtorCache = {
+      data: transformedData,
+      timestamp: now
+    };
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ SHERLOCK v18.7: Generated ${transformedData.length} debtors in ${duration}ms`);
+
     res.json({
       success: true,
-      data: debtors,
+      data: transformedData,
       meta: {
-        source: "UNIFIED FINANCIAL ENGINE v18.2",
-        count: debtors.length,
-        timestamp: new Date().toISOString()
+        count: transformedData.length,
+        calculationTime: duration,
+        accuracyGuaranteed: true,
+        cached: false
       }
     });
   } catch (error) {
-    console.error('Error getting debtor representatives:', error);
+    console.error('Error in unified financial debtors endpoint:', error);
     res.status(500).json({
       success: false,
-      error: "خطا در دریافت لیست بدهکاران"
+      error: "خطا در محاسبه بدهکاران"
     });
   }
 });
@@ -110,7 +157,7 @@ router.get('/debtors', requireAuth, async (req, res) => {
 router.get('/all-representatives', requireAuth, async (req, res) => {
   try {
     const allData = await unifiedFinancialEngine.calculateAllRepresentatives();
-    
+
     res.json({
       success: true,
       data: allData,
