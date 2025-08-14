@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
 interface AuthContextType {
@@ -36,6 +36,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('Admin Auth Success - Setting authenticated state');
       setIsAuthenticated(true);
       setUser(data.user);
+      // Invalidate queries to refresh all data
+      queryClient.invalidateQueries();
       // Force redirect to dashboard
       setTimeout(() => {
         console.log('Admin login successful, redirecting to:', '/dashboard');
@@ -97,9 +99,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Check authentication on mount and setup periodic checks
   useEffect(() => {
     checkAuth();
-  }, []);
+    
+    // Set up periodic auth check (every 5 minutes) only if authenticated
+    const interval = setInterval(() => {
+      if (isAuthenticated) {
+        checkAuth();
+      }
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   return (
     <AuthContext.Provider

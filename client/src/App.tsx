@@ -89,33 +89,6 @@ function CrmProtectedRoutes() {
 
 
 function AuthenticatedRouter() {
-  // Check authentication status with better caching
-  const { data: authStatus, isLoading: authLoading, error: authError } = useQuery({
-    queryKey: ['auth-status'],
-    queryFn: async () => {
-      try {
-        const response = await fetch('/api/auth/check', { credentials: 'include' });
-        
-        if (!response.ok) {
-          return { authenticated: false };
-        }
-
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        return { authenticated: false };
-      }
-    },
-    retry: false, // Don't retry on failure to prevent loops
-    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
-    gcTime: 15 * 60 * 1000, // Keep cached for 15 minutes
-    refetchOnWindowFocus: false, // Prevent refetch on window focus
-    refetchOnMount: false, // Only refetch when explicitly invalidated
-    refetchInterval: false
-  });
-
-  const isAuthenticated = authStatus?.authenticated === true;
-
   const { isAuthenticated: adminAuthenticated, isLoading: adminIsLoading } = useAuth();
   const [location] = useLocation();
 
@@ -171,19 +144,19 @@ function AuthenticatedRouter() {
   }
 
   // Show loading state while checking authentication
-  if (authLoading || adminIsLoading) {
+  if (adminIsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">در حال بارگذاری...</p>
+          <p className="text-gray-600 dark:text-gray-400">در حال بررسی احراز هویت...</p>
         </div>
       </div>
     );
   }
 
-  // SHERLOCK v3.0 FIX: Always show unified auth for non-authenticated users
-  if (!isAuthenticated || !adminAuthenticated) {
+  // SHERLOCK v3.0 FIX: Show unified auth for non-authenticated users  
+  if (!adminAuthenticated) {
     return (
       <CrmAuthProvider>
         <UnifiedAuth />
