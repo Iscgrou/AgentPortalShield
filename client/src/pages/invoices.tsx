@@ -251,15 +251,15 @@ export default function Invoices() {
   };
 
   // SHERLOCK v12.2: Use total statistics for widgets, not just current page  
-  const stats = totalStats || {
-    total: 0,
-    unpaid: 0,
-    paid: 0,
-    partial: 0,
-    overdue: 0,
-    totalAmount: 0,
-    sentToTelegram: 0,
-    unsentToTelegram: 0
+  const stats = {
+    total: totalStats?.totalInvoices || 0,
+    unpaid: totalStats?.unpaidCount || 0,
+    paid: totalStats?.paidCount || 0,
+    partial: totalStats?.partialCount || 0,
+    overdue: totalStats?.overdueCount || 0,
+    totalAmount: totalStats?.totalAmount || 0,
+    sentToTelegram: totalStats?.sentToTelegramCount || 0,
+    unsentToTelegram: totalStats?.unsentToTelegramCount || 0
   };
 
 
@@ -359,7 +359,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">کل فاکتورها</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                  {toPersianDigits(stats.total.toString())}
+                  {toPersianDigits((stats.total || 0).toString())}
                 </p>
               </div>
               <FileText className="w-8 h-8 text-gray-400" />
@@ -373,7 +373,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">پرداخت شده</p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">
-                  {toPersianDigits(stats.paid.toString())}
+                  {toPersianDigits((stats.paid || 0).toString())}
                 </p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-400" />
@@ -387,7 +387,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">پرداخت نشده</p>
                 <p className="text-2xl font-bold text-orange-600 dark:text-orange-400 mt-2">
-                  {toPersianDigits(stats.unpaid.toString())}
+                  {toPersianDigits((stats.unpaid || 0).toString())}
                 </p>
               </div>
               <Clock className="w-8 h-8 text-orange-400" />
@@ -401,7 +401,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">تسویه جزئی</p>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">
-                  {toPersianDigits(stats.partial.toString())}
+                  {toPersianDigits((stats.partial || 0).toString())}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-blue-400" />
@@ -415,7 +415,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">سررسید گذشته</p>
                 <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
-                  {toPersianDigits(stats.overdue.toString())}
+                  {toPersianDigits((stats.overdue || 0).toString())}
                 </p>
               </div>
               <AlertTriangle className="w-8 h-8 text-red-400" />
@@ -429,7 +429,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">ارسال نشده</p>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">
-                  {toPersianDigits(stats.unsentToTelegram.toString())}
+                  {toPersianDigits((stats.unsentToTelegram || 0).toString())}
                 </p>
               </div>
               <Send className="w-8 h-8 text-blue-400" />
