@@ -580,24 +580,6 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     }
   });
 
-      const payment = await storage.createPayment(validatedData);
-      
-      // Auto-allocate to oldest unpaid invoice if representativeId provided
-      if (validatedData.representativeId) {
-        await storage.autoAllocatePaymentToInvoices(payment.id, validatedData.representativeId);
-      }
-      
-      res.json(payment);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: "داده‌های ورودی نامعتبر", details: error.errors });
-      } else {
-        console.error('CRM Payment creation error:', error);
-        res.status(500).json({ error: "خطا در ایجاد پرداخت" });
-      }
-    }
-  });
-
   app.post("/api/crm/payments/auto-allocate/:representativeId", crmAuthMiddleware, async (req, res) => {
     try {
       const representativeId = parseInt(req.params.representativeId);
