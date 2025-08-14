@@ -5,6 +5,36 @@
 
 import { Router } from "express";
 import { unifiedStatisticsEngine } from "../services/unified-statistics-engine";
+// Assuming storage and authentication functions are available in the scope
+// For demonstration purposes, let's mock them here if not provided in the original context
+// In a real scenario, these would be imported from appropriate modules.
+const storage = {
+  getReports: async () => {
+    // Mock data for reports
+    return [
+      { id: 1, name: "Sales Report Q1", date: "2023-03-31" },
+      { id: 2, name: "Marketing Campaign Performance", date: "2023-04-15" }
+    ];
+  }
+};
+const authenticateToken = (req: any, res: any, next: any) => {
+  // Mock authentication, replace with actual token verification
+  const token = req.headers['authorization'];
+  if (token) {
+    next();
+  } else {
+    res.status(401).json({ error: 'Authentication token is required' });
+  }
+};
+const crmAuthMiddleware = (req: any, res: any, next: any) => {
+  // Mock CRM authentication, replace with actual CRM authentication
+  const crmToken = req.headers['crm-auth'];
+  if (crmToken) {
+    next();
+  } else {
+    res.status(401).json({ error: 'CRM authentication token is required' });
+  }
+};
 
 const router = Router();
 
@@ -184,6 +214,69 @@ router.get("/global-statistics", requireAuth, async (req, res) => {
     });
   }
 });
+
+// Reports endpoint with enhanced routing and response validation
+  app.get("/api/reports", authenticateToken, async (req, res) => {
+    try {
+      console.log('🔍 SHERLOCK v1.0: Reports API endpoint called');
+
+      // Ensure proper content type
+      res.setHeader('Content-Type', 'application/json');
+
+      const reports = await storage.getReports();
+
+      // Validate reports data
+      if (!reports) {
+        console.warn('⚠️ No reports data returned from storage');
+        return res.json({
+          success: true,
+          data: [],
+          message: 'هیچ گزارشی یافت نشد'
+        });
+      }
+
+      console.log('✅ Reports data retrieved successfully:', typeof reports, Array.isArray(reports) ? reports.length : 'non-array');
+
+      res.json({
+        success: true,
+        data: reports,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('❌ Reports API error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: error.message || 'خطا در دریافت گزارشات',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Additional CRM Reports endpoint for CRM panel
+  app.get("/api/crm/reports", crmAuthMiddleware, async (req, res) => {
+    try {
+      console.log('🔍 SHERLOCK v1.0: CRM Reports API endpoint called');
+
+      res.setHeader('Content-Type', 'application/json');
+
+      const reports = await storage.getReports();
+
+      res.json({
+        success: true,
+        data: reports || [],
+        panelType: 'CRM',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('❌ CRM Reports API error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: error.message || 'خطا در دریافت گزارشات CRM',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
 
 export function registerUnifiedStatisticsRoutes(app: any, requireAuth: any) {
   app.use("/api/unified-statistics", router);

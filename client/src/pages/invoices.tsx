@@ -78,10 +78,14 @@ export default function Invoices() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(30);
+  const [paginationInfo, setPaginationInfo] = useState<any>(null); // State to store pagination info
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // SHERLOCK v12.1: Backend handles all filtering and pagination now
+  // SHERLOCK v12.2: Fetch total statistics for widgets (not just current page)
+  // Enhanced error handling and data validation for invoices
   const { data: invoicesResponse, isLoading, error } = useQuery({
     queryKey: ["/api/invoices/with-batch-info", { 
       page: currentPage, 
@@ -97,23 +101,40 @@ export default function Invoices() {
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (searchTerm) params.append('search', searchTerm);
       if (telegramFilter !== 'all') params.append('telegram', telegramFilter);
-      
+
       return apiRequest(`/api/invoices/with-batch-info?${params.toString()}`);
     },
     select: (data: any) => {
       console.log('SHERLOCK v12.1 DEBUG: Raw data from API:', data);
       // Handle both array response and paginated response
       if (Array.isArray(data)) {
-        return { data: data, pagination: null };
+        setPaginationInfo({ totalPages: 1, totalCount: data.length }); // Assume single page if array
+        return { data: data, pagination: { totalPages: 1, totalCount: data.length } };
       }
-      return data;
+      if (data && data.data && Array.isArray(data.data)) {
+        if (data.pagination) {
+          setPaginationInfo(data.pagination);
+        }
+        return data;
+      }
+      console.warn('⚠️ Unexpected invoices data structure:', data);
+      setPaginationInfo({ totalPages: 0, totalCount: 0 }); // Reset pagination on unexpected data
+      return { data: [], pagination: { totalPages: 0, totalCount: 0 } };
     },
     retry: 3,
-    retryDelay: 1000
+    retryDelay: 1000,
+    onError: (err: any) => {
+      console.error("Error fetching invoices:", err);
+      toast({
+        title: "خطا در بارگذاری فاکتورها",
+        description: err?.message || "لطفا دوباره تلاش کنید",
+        variant: "destructive",
+      });
+    }
   });
 
   const invoices = invoicesResponse?.data || [];
-  const pagination = invoicesResponse?.pagination;
+  const pagination = invoicesResponse?.pagination || paginationInfo; // Use fetched or stored pagination
 
   console.log('SHERLOCK v12.1 DEBUG: Final invoices count:', invoices?.length || 0);
   console.log('SHERLOCK v12.1 DEBUG: isLoading:', isLoading);
@@ -150,7 +171,7 @@ export default function Invoices() {
     }
   });
 
-  // SHERLOCK v12.1: Backend handles all filtering and pagination now
+  // Filtered and paginated invoices are now handled by the backend query
   const filteredInvoices = invoices || [];
   const paginatedInvoices = filteredInvoices;
 
@@ -158,10 +179,10 @@ export default function Invoices() {
   const totalPages = pagination?.totalPages || Math.ceil(filteredInvoices.length / pageSize);
   const totalCount = pagination?.totalCount || filteredInvoices.length;
 
-  // SHERLOCK v12.2: Fetch total statistics for widgets (not just current page)
+  // SHERLOCK v12.2: Use total statistics for widgets, not just current page  
   const { data: totalStats } = useQuery({
     queryKey: ["/api/invoices/statistics"],
-    enabled: true
+    enabled: true // Ensure this query runs
   });
 
   // Reset to first page when filters change and invalidate cache
@@ -251,12 +272,13 @@ export default function Invoices() {
     sentToTelegram: totalStats.sentToTelegramCount || 0,
     unsentToTelegram: totalStats.unsentToTelegramCount || 0
   } : {
+    // Fallback if totalStats is not yet loaded or undefined
     total: filteredInvoices.length,
     unpaid: filteredInvoices.filter((inv: Invoice) => inv.status === 'unpaid').length,
     paid: filteredInvoices.filter((inv: Invoice) => inv.status === 'paid').length,
     partial: filteredInvoices.filter((inv: Invoice) => inv.status === 'partial').length,
     overdue: filteredInvoices.filter((inv: Invoice) => inv.status === 'overdue').length,
-    totalAmount: filteredInvoices.reduce((sum: number, inv: Invoice) => sum + parseFloat(inv.amount), 0),
+    totalAmount: filteredInvoices.reduce((sum: number, inv: Invoice) => sum + parseFloat(inv.amount || '0'), 0),
     sentToTelegram: filteredInvoices.filter((inv: Invoice) => inv.sentToTelegram).length,
     unsentToTelegram: filteredInvoices.filter((inv: Invoice) => !inv.sentToTelegram).length
   };
@@ -309,6 +331,23 @@ export default function Invoices() {
       </div>
     );
   }
+
+  // Handle potential error state after loading
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <AlertTriangle className="w-12 h-12 text-red-500" />
+        <h2 className="text-2xl font-semibold text-red-600">خطا در بارگذاری فاکتورها</h2>
+        <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">
+          متاسفانه در بارگذاری اطلاعات فاکتورها مشکلی رخ داده است. لطفا صفحه را رفرش کنید یا بعدا دوباره تلاش نمایید.
+        </p>
+        <Button onClick={() => window.location.reload()}>
+          رفرش صفحه
+        </Button>
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Users, 
@@ -132,7 +132,7 @@ const representativeFormSchema = z.object({
 export default function Representatives() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [selectedRep, setSelectedRep] = useState<RepresentativeWithDetails | null>(null);
+  const [selectedRep, setSelectedRep] = useState<Representative | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -167,17 +167,46 @@ export default function Representatives() {
     return sortOrder === "asc" ? "⬆️" : "⬇️";
   };
 
-  const { data: representatives = [], isLoading } = useQuery<Representative[]>({
-    queryKey: ["/api/representatives"],
-    queryFn: () => apiRequest("/api/representatives"),
+  const { data: representatives = [], isLoading, error } = useQuery<Representative[]>({
+    queryKey: ["/api/crm/representatives"],
+    queryFn: () => apiRequest("/api/crm/representatives"),
     select: (data: any) => {
-      console.log('SHERLOCK v12.1 DEBUG: Representatives data:', data);
-      if (Array.isArray(data)) return data;
-      if (data && Array.isArray(data.data)) return data.data;
+      console.log('🔍 SHERLOCK v1.0 Representatives data analysis:', {
+        dataType: typeof data,
+        isArray: Array.isArray(data),
+        hasDataProperty: data && typeof data === 'object' && 'data' in data,
+        dataLength: Array.isArray(data) ? data.length : (data?.data?.length || 0)
+      });
+
+      // Enhanced data validation and extraction
+      if (Array.isArray(data)) {
+        console.log('✅ Direct array data found:', data.length, 'representatives');
+        return data;
+      }
+      if (data && typeof data === 'object' && Array.isArray(data.data)) {
+        console.log('✅ Nested array data found:', data.data.length, 'representatives');
+        return data.data;
+      }
+      if (data && typeof data === 'object' && data.success && Array.isArray(data.data)) {
+        console.log('✅ Success response with array data:', data.data.length, 'representatives');
+        return data.data;
+      }
+
+      console.warn('⚠️ Unexpected data structure:', data);
       return [];
     },
     retry: 3,
-    retryDelay: 1000
+    retryDelay: (attemptIndex) => Math.min(1000 * (2 ** attemptIndex), 30000),
+    staleTime: 30000, // 30 seconds
+    cacheTime: 300000, // 5 minutes
+    onError: (error: any) => {
+      console.error('❌ Representatives query error:', error);
+      toast({
+        title: "خطا در بارگذاری نمایندگان",
+        description: error?.message || "لطفا دوباره تلاش کنید",
+        variant: "destructive"
+      });
+    }
   });
 
 
@@ -273,13 +302,13 @@ export default function Representatives() {
   // Create representative mutation
   const createRepresentativeMutation = useMutation({
     mutationFn: async (data: z.infer<typeof representativeFormSchema>) => {
-      return apiRequest("/api/representatives", {
+      return apiRequest("/api/crm/representatives", {
         method: "POST",
         data: data
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
       toast({
         title: "موفقیت",
         description: "نماینده جدید با موفقیت ایجاد شد"
@@ -298,13 +327,13 @@ export default function Representatives() {
   // Update representative mutation
   const updateRepresentativeMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number, data: Partial<z.infer<typeof representativeFormSchema>> }) => {
-      return apiRequest(`/api/representatives/${id}`, {
+      return apiRequest(`/api/crm/representatives/${id}`, {
         method: "PUT",
         data: data
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
       toast({
         title: "موفقیت",
         description: "اطلاعات نماینده بروزرسانی شد"
@@ -322,7 +351,7 @@ export default function Representatives() {
 
   const handleViewDetails = async (rep: Representative) => {
     try {
-      const detailsResponse = await apiRequest(`/api/representatives/${rep.code}`);
+      const detailsResponse = await apiRequest(`/api/crm/representatives/${rep.code}`);
       setSelectedRep({
         ...rep,
         invoices: detailsResponse.invoices || [],
@@ -371,13 +400,13 @@ export default function Representatives() {
   // Update representative debt after invoice edit
   const updateRepresentativeDebtMutation = useMutation({
     mutationFn: async ({ id, newDebt }: { id: number, newDebt: string }) => {
-      return apiRequest(`/api/representatives/${id}`, {
+      return apiRequest(`/api/crm/representatives/${id}`, {
         method: "PUT",
         data: { totalDebt: newDebt }
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
     }
   });
@@ -390,7 +419,7 @@ export default function Representatives() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       toast({
@@ -422,7 +451,7 @@ export default function Representatives() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       toast({
@@ -463,6 +492,22 @@ export default function Representatives() {
       </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full py-20">
+        <AlertTriangle className="w-16 h-16 text-red-500 mb-4" />
+        <h2 className="text-2xl font-semibold text-red-600 mb-2">خطا در بارگذاری</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-6">
+          امکان بارگذاری اطلاعات نمایندگان وجود ندارد. لطفاً دوباره تلاش کنید.
+        </p>
+        <Button onClick={() => window.location.reload()} className="bg-primary text-white hover:bg-primary-hover">
+          تلاش مجدد
+        </Button>
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-6">
@@ -1109,7 +1154,7 @@ export default function Representatives() {
                   <div>
                     <span className="text-red-600 dark:text-red-400 font-medium">وضعیت تخصیص:</span>
                     <div className="mt-1">
-                      <Badge variant={paymentToDelete.isAllocated ? 'default' : 'secondary'} className="text-xs">
+                      <Badge variant={paymentToDelete.isAllocated ? 'default' : 'secondary'}>
                         {paymentToDelete.isAllocated ? 'تخصیص یافته' : 'تخصیص نیافته'}
                       </Badge>
                     </div>
@@ -2174,7 +2219,7 @@ function CreatePaymentDialog({
   const performComprehensiveFinancialSync = async () => {
     try {
       // 1. Invalidate all related query caches
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
@@ -2182,7 +2227,7 @@ function CreatePaymentDialog({
       queryClient.invalidateQueries({ queryKey: [`/api/representatives/${representative.code}`] });
 
       // 2. Force refresh current representative data
-      await queryClient.refetchQueries({ queryKey: [`/api/representatives/${representative.code}`] });
+      await queryClient.refetchQueries({ queryKey: [`/api/crm/representatives/${representative.code}`] });
 
       // 3. Refresh parent component data if available
       if (window.location.pathname.includes('/crm')) {

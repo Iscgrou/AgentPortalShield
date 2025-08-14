@@ -88,17 +88,46 @@ export default function SalesPartners() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: salesPartners = [], isLoading } = useQuery<SalesPartner[]>({
+  const { data: salesPartners = [], isLoading, error } = useQuery<SalesPartner[]>({
     queryKey: ["/api/sales-partners"],
     queryFn: () => apiRequest("/api/sales-partners"),
     select: (data: any) => {
-      console.log('SHERLOCK v12.1 DEBUG: Sales Partners data:', data);
-      if (Array.isArray(data)) return data;
-      if (data && Array.isArray(data.data)) return data.data;
+      console.log('🔍 SHERLOCK v1.0 Sales Partners data analysis:', {
+        dataType: typeof data,
+        isArray: Array.isArray(data),
+        hasDataProperty: data && typeof data === 'object' && 'data' in data,
+        dataLength: Array.isArray(data) ? data.length : (data?.data?.length || 0)
+      });
+      
+      // Comprehensive data validation for sales partners
+      if (Array.isArray(data)) {
+        console.log('✅ Direct array sales partners:', data.length);
+        return data;
+      }
+      if (data && typeof data === 'object' && Array.isArray(data.data)) {
+        console.log('✅ Nested array sales partners:', data.data.length);
+        return data.data;
+      }
+      if (data && typeof data === 'object' && data.success && Array.isArray(data.data)) {
+        console.log('✅ Success response with sales partners array:', data.data.length);
+        return data.data;
+      }
+      
+      console.warn('⚠️ Unexpected sales partners data structure:', data);
       return [];
     },
     retry: 3,
-    retryDelay: 1000
+    retryDelay: (attemptIndex) => Math.min(1000 * (2 ** attemptIndex), 30000),
+    staleTime: 30000,
+    cacheTime: 300000,
+    onError: (error: any) => {
+      console.error('❌ Sales Partners query error:', error);
+      toast({
+        title: "خطا در بارگذاری همکاران فروش",
+        description: error?.message || "لطفا دوباره تلاش کنید",
+        variant: "destructive"
+      });
+    }
   });
 
   const { data: stats } = useQuery<SalesPartnerStats>({
