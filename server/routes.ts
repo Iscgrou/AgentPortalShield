@@ -2,8 +2,8 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { sql, eq, and, or, like, gte, lte, asc, count, desc } from "drizzle-orm";
-import { invoices, representatives, payments, activityLogs } from "@shared/schema";
+import { sql, eq, and, or, like, gte, lte, asc } from "drizzle-orm";
+import { invoices, representatives, payments } from "@shared/schema";
 // CRM routes are imported in registerCrmRoutes function
 
 import multer from "multer";
@@ -21,6 +21,20 @@ import {
   // فاز ۱: Schema برای مدیریت دوره‌ای فاکتورها
   insertInvoiceBatchSchema
 } from "@shared/schema";
+// 🗑️ SHERLOCK v18.4: LEGACY IMPORTS DEPRECATED - causing 11,117,500 تومان financial discrepancy
+// These imports cause financial calculation inconsistencies and have been replaced:
+// import { 
+//   parseUsageJsonData, 
+//   processUsageData, 
+//   processUsageDataSequential,
+//   validateUsageData, 
+//   getOrCreateDefaultSalesPartner, 
+//   createRepresentativeFromUsageData,
+//   getCurrentPersianDate,
+//   addDaysToPersianDate,
+//   toPersianDigits 
+// } from "./services/invoice";
+
 // ✅ NEW STANDARDIZED IMPORTS:
 import { registerStandardizedInvoiceRoutes } from "./routes/standardized-invoice-routes";
 import { 
@@ -42,12 +56,6 @@ import { unifiedFinancialEngine } from './services/unified-financial-engine.js';
 // Import maintenance routes registration
 import { registerMaintenanceRoutes } from "./routes/maintenance-routes";
 
-// Import unified statistics routes registration
-import { registerUnifiedStatisticsRoutes } from "./routes/unified-statistics-routes.js";
-// Register unified financial routes  
-import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-routes.js";
-
-
 // Configure multer for file uploads with broader JSON acceptance
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -61,13 +69,9 @@ const upload = multer({
   }
 });
 
-// Session authentication middleware - centralized version
+// Authentication middleware
 function requireAuth(req: any, res: any, next: any) {
-  const isAdminAuthenticated = req.session?.authenticated === true && 
-                              req.session?.user?.role === 'admin';
-  const isCrmAuthenticated = req.session?.crmAuthenticated === true;
-
-  if (isAdminAuthenticated || isCrmAuthenticated) {
+  if ((req.session as any)?.authenticated) {
     next();
   } else {
     res.status(401).json({ error: "احراز هویت نشده" });
@@ -91,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // Register essential CRM routes (core functionality only)
-  registerCrmRoutes(app, requireAuth); // Pass requireAuth here
+  registerCrmRoutes(app, storage);
 
   // Register Settings routes (core system settings)
   registerSettingsRoutes(app);
@@ -103,17 +107,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerMaintenanceRoutes(app);
 
   // SHERLOCK v18.4: سیستم مالی یکپارچه واحد - تنها سیستم مالی فعال
-  // Previously imported and used directly:
-  // const unifiedFinancialRoutes = (await import('./routes/unified-financial-routes.js')).default;
-  // app.use('/api/unified-financial', unifiedFinancialRoutes);
-  registerUnifiedFinancialRoutes(app, requireAuth);
-
+  const unifiedFinancialRoutes = (await import('./routes/unified-financial-routes.js')).default;
+  app.use('/api/unified-financial', unifiedFinancialRoutes);
 
   // SHERLOCK v18.4: آمار یکپارچه واحد - جایگزین همه سیستم‌های آماری موازی
-  // Previously imported and used directly:
-  // const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
-  // app.use("/api/unified-statistics", unifiedStatisticsRoutes);
-  registerUnifiedStatisticsRoutes(app, requireAuth);
+  const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
+  app.use("/api/unified-statistics", unifiedStatisticsRoutes);
+
 
 
   // xAI Grok Configuration API
@@ -2363,14 +2363,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get detailed invoice and payment info
       const invoicesData = await db.select({
-        count: count(),
+        count: sql<number>`COUNT(*)`,
         totalAmount: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`,
         unpaidAmount: sql<number>`COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue', 'partial') THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
         paidAmount: sql<number>`COALESCE(SUM(CASE WHEN status = 'paid' THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`
       }).from(invoices).where(eq(invoices.representativeId, representativeId));
 
       const paymentsData = await db.select({
-        count: count(),
+        count: sql<number>`COUNT(*)`,
         totalAmount: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`,
         allocatedAmount: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = true THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
         unallocatedAmount: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = false THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`

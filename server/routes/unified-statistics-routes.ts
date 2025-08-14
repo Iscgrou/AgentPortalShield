@@ -153,41 +153,17 @@ router.get("/health", async (req, res) => {
         "Financial Overview",
         "Real-time Caching",
         "Activity Tracking",
-        "Financial Integrity"
+        "Financial Integrity Integration"
       ]
     });
   } catch (error: any) {
-    console.error("Health check error:", error);
     res.status(500).json({
       success: false,
-      status: "UNHEALTHY",  
-      error: error.message
+      status: "UNHEALTHY",
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });
 
-/**
- * Compatibility endpoints for legacy dashboard routes
- * Redirect old endpoints to new unified ones
- */
-router.get("/global-statistics", requireAuth, async (req, res) => {
-  // Redirect legacy endpoint to new unified one
-  try {
-    const stats = await unifiedStatisticsEngine.getGlobalStatistics();
-    res.json({ success: true, data: stats });
-  } catch (error: any) {
-    console.error("Legacy global statistics error:", error);
-    res.status(500).json({
-      success: false,
-      error: "خطا در دریافت آمار کلی",
-      details: error.message
-    });
-  }
-});
-
-export function registerUnifiedStatisticsRoutes(app: any, requireAuth: any) {
-  app.use("/api/unified-statistics", router);
-
-  // Legacy compatibility routes  
-  app.use("/api/dashboard", router);
-}
+export default router;
