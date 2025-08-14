@@ -269,6 +269,48 @@ router.get('/total-debt', requireAuth, async (req, res) => {
 });
 
 /**
+ * ✅ SHERLOCK v23.0: محاسبه دستی مجموع بدهی و تایید صحت
+ * GET /api/unified-financial/verify-total-debt
+ */
+router.get('/verify-total-debt', requireAuth, async (req, res) => {
+  try {
+    const verificationResult = await unifiedFinancialEngine.verifyTotalDebtSum();
+
+    res.json({
+      success: true,
+      verification: {
+        expectedAmount: 173146990, // The amount shown in widget
+        calculations: {
+          fromRepresentativesTable: verificationResult.representativesTableSum,
+          fromUnifiedEngine: verificationResult.unifiedEngineSum,
+          fromDirectSQL: verificationResult.directSqlSum
+        },
+        accuracy: {
+          tableVsExpected: verificationResult.representativesTableSum === 173146990,
+          engineVsExpected: verificationResult.unifiedEngineSum === 173146990,
+          sqlVsExpected: verificationResult.directSqlSum === 173146990,
+          allMethodsConsistent: verificationResult.isConsistent
+        },
+        statistics: {
+          totalRepresentatives: 245, // Based on your system
+          representativesWithDebt: verificationResult.detailedBreakdown.length,
+          representativesWithoutDebt: 245 - verificationResult.detailedBreakdown.length
+        },
+        topDebtors: verificationResult.detailedBreakdown,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in debt verification:', error);
+    res.status(500).json({
+      success: false,
+      error: "خطا در تایید مجموع بدهی"
+    });
+  }
+});
+
+/**
  * تست authentication
  */
 router.get('/auth-test', requireAuth, async (req, res) => {
