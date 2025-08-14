@@ -345,9 +345,14 @@ export class UnifiedFinancialEngine {
         .sort((a, b) => b.actualDebt - a.actualDebt)
         .slice(0, limit);
 
-      console.log(`✅ SHERLOCK v1.0: Generated ${results.length} debtors in ${Date.now() - startTime}ms`);
+      console.log(`✅ SHERLOCK v18.7: Generated ${sortedDebtors.length} debtors in ${Date.now() - startTime}ms`);
 
-    return results;
+      return sortedDebtors;
+
+    } catch (error) {
+      console.error(`❌ SHERLOCK v18.7: Error in debtor calculation:`, error);
+      return [];
+    }
   }
 
   /**
