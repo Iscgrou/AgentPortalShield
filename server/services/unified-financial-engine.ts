@@ -13,22 +13,22 @@ export interface UnifiedFinancialData {
   representativeId: number;
   representativeName: string;
   representativeCode: string;
-  
+
   // Real-time calculations ONLY
   totalSales: number;
   totalPaid: number;
   totalUnpaid: number;
   actualDebt: number;
-  
+
   // Performance metrics
   paymentRatio: number;
   debtLevel: 'HEALTHY' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-  
+
   // Transaction summary
   invoiceCount: number;
   paymentCount: number;
   lastTransactionDate: string | null;
-  
+
   // Integrity verification
   calculationTimestamp: string;
   accuracyGuaranteed: boolean;
@@ -38,26 +38,29 @@ export interface GlobalFinancialSummary {
   // System totals
   totalRepresentatives: number;
   activeRepresentatives: number;
-  
+
   // Financial aggregates
   totalSystemSales: number;
   totalSystemPaid: number;
   totalSystemDebt: number;
-  
+
   // Distribution analysis
   healthyReps: number;
   moderateReps: number;
   highRiskReps: number;
   criticalReps: number;
-  
+
   // System health
   systemAccuracy: number;
   lastCalculationTime: string;
   dataIntegrity: 'EXCELLENT' | 'GOOD' | 'NEEDS_ATTENTION';
 }
 
-class UnifiedFinancialEngine {
-  
+export class UnifiedFinancialEngine {
+  // Static cache for performance optimization
+  private static cache = new Map<string, { data: any; timestamp: number }>();
+  private static readonly CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
   /**
    * Real-time calculation for single representative
    */
@@ -96,13 +99,13 @@ class UnifiedFinancialEngine {
     // ✅ SHERLOCK v22.1 CRITICAL FIX: Calculate debt using REAL-TIME allocation
     // Step 1: Get EXACT unpaid amount considering partial payments
     const realTimeUnpaid = await this.calculateRealTimeUnpaidAmount(representativeId);
-    
+
     // Step 2: Calculate actual debt using allocated payments
     const actualDebt = Math.max(0, realTimeUnpaid - payment.allocatedAmount);
-    
+
     // Performance metrics
     const paymentRatio = invoice.totalAmount > 0 ? (payment.allocatedAmount / invoice.totalAmount) * 100 : 0;
-    
+
     // Debt level classification
     let debtLevel: 'HEALTHY' | 'MODERATE' | 'HIGH' | 'CRITICAL';
     if (actualDebt === 0) debtLevel = 'HEALTHY';
@@ -114,19 +117,19 @@ class UnifiedFinancialEngine {
       representativeId,
       representativeName: rep[0].name,
       representativeCode: rep[0].code,
-      
+
       totalSales: invoice.totalAmount,
       totalPaid: payment.allocatedAmount,
       totalUnpaid: realTimeUnpaid, // ✅ Use real-time calculation
       actualDebt,
-      
+
       paymentRatio: Math.round(paymentRatio * 100) / 100,
       debtLevel,
-      
+
       invoiceCount: invoice.count,
       paymentCount: payment.count,
       lastTransactionDate: invoice.lastDate || payment.lastDate || null,
-      
+
       calculationTimestamp: new Date().toISOString(),
       accuracyGuaranteed: true
     };
@@ -177,7 +180,7 @@ class UnifiedFinancialEngine {
    */
   async calculateGlobalSummary(): Promise<GlobalFinancialSummary> {
     console.log("🧮 UNIFIED FINANCIAL ENGINE: Calculating global summary...");
-    
+
     // Count representatives
     const repCounts = await db.select({
       total: sql<number>`COUNT(*)`,
@@ -203,7 +206,7 @@ class UnifiedFinancialEngine {
     }).from(representatives);
 
     let healthy = 0, moderate = 0, high = 0, critical = 0;
-    
+
     allRepsWithDebt.forEach(rep => {
       if (rep.debt === 0) healthy++;
       else if (rep.debt <= 100000) moderate++;
@@ -213,11 +216,11 @@ class UnifiedFinancialEngine {
 
     const totalSystemDebt = invoiceGlobal[0].unpaidAmount - paymentGlobal[0].allocatedAmount;
     const systemAccuracy = 100; // Guaranteed by real-time calculations
-    
+
     // Determine data integrity
     let dataIntegrity: 'EXCELLENT' | 'GOOD' | 'NEEDS_ATTENTION';
     const criticalRatio = repCounts[0].total > 0 ? (critical / repCounts[0].total) * 100 : 0;
-    
+
     if (criticalRatio < 10) dataIntegrity = 'EXCELLENT';
     else if (criticalRatio < 25) dataIntegrity = 'GOOD';
     else dataIntegrity = 'NEEDS_ATTENTION';
@@ -225,16 +228,16 @@ class UnifiedFinancialEngine {
     return {
       totalRepresentatives: repCounts[0].total,
       activeRepresentatives: repCounts[0].active,
-      
+
       totalSystemSales: invoiceGlobal[0].totalAmount,
       totalSystemPaid: paymentGlobal[0].allocatedAmount,
       totalSystemDebt,
-      
+
       healthyReps: healthy,
       moderateReps: moderate,
       highRiskReps: high,
       criticalReps: critical,
-      
+
       systemAccuracy,
       lastCalculationTime: new Date().toISOString(),
       dataIntegrity
@@ -261,7 +264,7 @@ class UnifiedFinancialEngine {
    */
   async getDebtorRepresentatives(limit: number = 50): Promise<UnifiedFinancialData[]> {
     const allData = await this.calculateAllRepresentatives();
-    
+
     return allData
       .filter(rep => rep.actualDebt > 0)
       .sort((a, b) => b.actualDebt - a.actualDebt)
