@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthChecked(true);
       checkingAuth.current = false;
     }
-  }, [authChecked]);
+  }, []);
 
   const login = useCallback(() => {
     setIsAuthenticated(true);
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🔍 Admin Auth: Initial check');
       checkAuth();
     }
-  }, [checkAuth]); // Include checkAuth but prevent infinite loops with refs
+  }, []); // Empty dependency array to run only once on mount
 
   return (
     <AuthContext.Provider

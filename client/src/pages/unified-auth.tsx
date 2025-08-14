@@ -26,14 +26,14 @@ export default function UnifiedAuth() {
       if (adminAuth) {
         console.log('✅ Admin authenticated, redirecting...');
         redirected.current = true;
-        setLocation("/admin");
+        setTimeout(() => setLocation("/admin"), 100);
         return;
       }
 
       if (crmAuth) {
         console.log('✅ CRM authenticated, redirecting...');
         redirected.current = true;
-        setLocation("/crm");
+        setTimeout(() => setLocation("/crm"), 100);
         return;
       }
     }

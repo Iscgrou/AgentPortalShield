@@ -61,7 +61,7 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       setAuthChecked(true);
       checkingAuth.current = false;
     }
-  }, [authChecked]);
+  }, []);
 
   // Login mutation
   const loginMutation = useMutation({
@@ -107,7 +107,7 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       console.log('🔍 CRM Auth: Initial check');
       checkAuth();
     }
-  }, [checkAuth]); // Include checkAuth but prevent infinite loops with refs
+  }, []); // Empty dependency array to run only once on mount
 
   return (
     <CrmAuthContext.Provider

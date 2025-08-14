@@ -35,7 +35,7 @@ function AdminProtectedRoutes() {
     if (!isLoading && !isAuthenticated && !redirected.current) {
       console.log('Admin Authentication required, redirecting to login...');
       redirected.current = true;
-      setLocation('/');
+      setTimeout(() => setLocation('/'), 100);
     }
   }, [isAuthenticated, isLoading, setLocation]);
 
@@ -61,12 +61,13 @@ function AdminProtectedRoutes() {
   return (
     <>
       <Route path="/admin" component={Dashboard} />
+      <Route path="/admin/" component={Dashboard} />
       <Route path="/admin/representatives" component={Representatives} />
       <Route path="/admin/invoices" component={Invoices} />
       <Route path="/admin/sales-partners" component={SalesPartners} />
       <Route path="/admin/financial-integrity" component={FinancialIntegrity} />
       <Route path="/admin/settings" component={Settings} />
-      <Route path="/admin/*" component={NotFound} />
+      <Route path="/admin/:rest*" component={NotFound} />
     </>
   );
 }
@@ -80,7 +81,7 @@ function CrmProtectedRoutes() {
     if (!isLoading && !user && !redirected.current) {
       console.log('CRM Authentication required, redirecting to login...');
       redirected.current = true;
-      setLocation('/');
+      setTimeout(() => setLocation('/'), 100);
     }
   }, [user, isLoading, setLocation]);
 
@@ -106,10 +107,11 @@ function CrmProtectedRoutes() {
   return (
     <>
       <Route path="/crm" component={Dashboard} />
+      <Route path="/crm/" component={Dashboard} />
       <Route path="/crm/representatives" component={Representatives} />
       <Route path="/crm/invoices" component={Invoices} />
       <Route path="/crm/settings" component={Settings} />
-      <Route path="/crm/*" component={NotFound} />
+      <Route path="/crm/:rest*" component={NotFound} />
     </>
   );
 }
@@ -122,9 +124,9 @@ function App() {
           <CrmAuthProvider>
             <>
               <Route path="/" component={UnifiedAuth} />
-              <Route path="/admin/*" component={AdminProtectedRoutes} />
-              <Route path="/crm/*" component={CrmProtectedRoutes} />
-              <Route component={NotFound} />
+              <Route path="/admin/:rest*" component={AdminProtectedRoutes} />
+              <Route path="/crm/:rest*" component={CrmProtectedRoutes} />
+              <Route path="/:rest*" component={NotFound} />
             </>
             <Toaster />
           </CrmAuthProvider>
