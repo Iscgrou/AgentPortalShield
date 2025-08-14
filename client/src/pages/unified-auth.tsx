@@ -21,14 +21,14 @@ export default function UnifiedAuth() {
   const handleAuthRedirect = useCallback(() => {
     if (redirected.current) return;
 
-    if (!adminLoading && adminAuth) {
+    if (!adminLoading && adminAuth && !crmAuth) {
       console.log('✅ Admin authenticated, redirecting...');
       redirected.current = true;
       setLocation("/admin");
       return;
     }
 
-    if (!crmLoading && crmAuth) {
+    if (!crmLoading && crmAuth && !adminAuth) {
       console.log('✅ CRM authenticated, redirecting...');
       redirected.current = true;
       setLocation("/crm");
@@ -37,7 +37,11 @@ export default function UnifiedAuth() {
   }, [adminAuth, crmAuth, adminLoading, crmLoading, setLocation]);
 
   useEffect(() => {
-    handleAuthRedirect();
+    const timeoutId = setTimeout(() => {
+      handleAuthRedirect();
+    }, 100); // کمی تاخیر برای تثبیت state
+
+    return () => clearTimeout(timeoutId);
   }, [handleAuthRedirect]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -61,9 +65,16 @@ export default function UnifiedAuth() {
   const isLoading = adminLogin.isPending || crmLogin.isPending || adminLoading || crmLoading;
   const error = adminLogin.error || crmLogin.error;
 
-  // Don't render if already authenticated and redirecting
+  // اگر authenticated است، loading screen نمایش بده تا redirect شود
   if ((adminAuth || crmAuth) && !isLoading) {
-    return null;
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">در حال انتقال...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -149,7 +160,7 @@ export default function UnifiedAuth() {
 
           <div className="mt-6 text-xs text-gray-500 text-center">
             <p>🔒 ورود امن با تأیید دو مرحله‌ای</p>
-            <p className="mt-1">نسخه: SHERLOCK v12.2 | وضعیت: پایدار ✅</p>
+            <p className="mt-1">نسخه: SHERLOCK v13.0 | وضعیت: پایدار ✅</p>
           </div>
         </CardContent>
       </Card>

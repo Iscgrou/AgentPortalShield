@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "wouter";
+import { Router, Switch, Route, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { useLocation } from "wouter";
@@ -59,7 +59,7 @@ function AdminProtectedRoutes() {
   }
 
   return (
-    <Routes>
+    <Switch>
       <Route path="/admin" component={Dashboard} />
       <Route path="/admin/representatives" component={Representatives} />
       <Route path="/admin/invoices" component={Invoices} />
@@ -67,7 +67,7 @@ function AdminProtectedRoutes() {
       <Route path="/admin/financial-integrity" component={FinancialIntegrity} />
       <Route path="/admin/settings" component={Settings} />
       <Route path="/admin/*" component={NotFound} />
-    </Routes>
+    </Switch>
   );
 }
 
@@ -104,13 +104,13 @@ function CrmProtectedRoutes() {
   }
 
   return (
-    <Routes>
+    <Switch>
       <Route path="/crm" component={Dashboard} />
       <Route path="/crm/representatives" component={Representatives} />
       <Route path="/crm/invoices" component={Invoices} />
       <Route path="/crm/settings" component={Settings} />
       <Route path="/crm/*" component={NotFound} />
-    </Routes>
+    </Switch>
   );
 }
 
@@ -120,12 +120,12 @@ function App() {
       <Router>
         <AuthProvider>
           <CrmAuthProvider>
-            <Routes>
+            <Switch>
               <Route path="/" component={UnifiedAuth} />
               <Route path="/admin/*" component={AdminProtectedRoutes} />
               <Route path="/crm/*" component={CrmProtectedRoutes} />
               <Route component={NotFound} />
-            </Routes>
+            </Switch>
             <Toaster />
           </CrmAuthProvider>
         </AuthProvider>
