@@ -13,21 +13,21 @@ interface MulterRequest extends Request {
   file?: Express.Multer.File;
 }
 import { z } from "zod";
-import { 
-  insertRepresentativeSchema, 
-  insertSalesPartnerSchema, 
-  insertInvoiceSchema, 
+import {
+  insertRepresentativeSchema,
+  insertSalesPartnerSchema,
+  insertInvoiceSchema,
   insertPaymentSchema,
   // فاز ۱: Schema برای مدیریت دوره‌ای فاکتورها
   insertInvoiceBatchSchema
 } from "@shared/schema";
 // ✅ NEW STANDARDIZED IMPORTS:
 import { registerStandardizedInvoiceRoutes } from "./routes/standardized-invoice-routes";
-import { 
-  sendInvoiceToTelegram, 
-  sendBulkInvoicesToTelegram, 
-  getDefaultTelegramTemplate, 
-  formatInvoiceStatus 
+import {
+  sendInvoiceToTelegram,
+  sendBulkInvoicesToTelegram,
+  getDefaultTelegramTemplate,
+  formatInvoiceStatus
 } from "./services/telegram";
 
 import { xaiGrokEngine } from "./services/xai-grok-engine";
@@ -44,7 +44,7 @@ import { registerMaintenanceRoutes } from "./routes/maintenance-routes";
 
 // Import unified statistics routes registration
 import { registerUnifiedStatisticsRoutes } from "./routes/unified-statistics-routes.js";
-// Register unified financial routes  
+// Register unified financial routes
 import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-routes.js";
 
 // Import database optimization routes registration
@@ -64,18 +64,50 @@ const upload = multer({
   }
 });
 
-// Session authentication middleware - centralized version
-function requireAuth(req: any, res: any, next: any) {
-  const isAdminAuthenticated = req.session?.authenticated === true && 
-                              req.session?.user?.role === 'admin';
-  const isCrmAuthenticated = req.session?.crmAuthenticated === true;
+// Authentication middleware - Enhanced Cross-Panel Support with Session Recovery
+  const authMiddleware = (req: any, res: any, next: any) => {
+    // SHERLOCK v1.0: Enhanced authentication check with multiple fallbacks
+    const isAdminAuthenticated = req.session?.authenticated === true ||
+                                (req.session?.user && (req.session.user.role === 'admin' || req.session.user.role === 'ADMIN' || req.session.user.role === 'SUPER_ADMIN'));
+    const isCrmAuthenticated = req.session?.crmAuthenticated === true || req.session?.crmUser;
 
-  if (isAdminAuthenticated || isCrmAuthenticated) {
-    next();
-  } else {
-    res.status(401).json({ error: "احراز هویت نشده" });
-  }
-}
+    // Additional fallback for session recovery
+    const hasValidSession = req.session && (req.session.authenticated || req.session.crmAuthenticated);
+
+    const isAuthenticated = isAdminAuthenticated || isCrmAuthenticated || hasValidSession;
+
+    // Enhanced debug logging for production monitoring
+    if (!isAuthenticated) {
+      console.log('🔒 SHERLOCK v1.0 Auth Failed:', {
+        sessionId: req.sessionID,
+        hasSession: !!req.session,
+        adminAuth: req.session?.authenticated,
+        crmAuth: req.session?.crmAuthenticated,
+        adminUser: !!req.session?.user,
+        crmUser: !!req.session?.crmUser,
+        hasValidSession,
+        path: req.path,
+        method: req.method,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (isAuthenticated) {
+      // Touch session to extend expiry
+      req.session.touch();
+      console.log(`✅ SHERLOCK v1.0 Auth Success: ${req.method} ${req.path}`);
+      next();
+    } else {
+      console.log(`❌ SHERLOCK v1.0 Auth Denied: ${req.method} ${req.path}`);
+      res.status(401).json({
+        error: 'احراز هویت نشده',
+        path: req.path,
+        method: req.method,
+        timestamp: new Date().toISOString(),
+        sessionId: req.sessionID
+      });
+    }
+  };
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
@@ -93,14 +125,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.error("Failed to initialize default CRM user:", error);
   }
 
+  // SHERLOCK v1.0: Authentication Test Endpoint (before other routes)
+  app.get("/api/auth/test", (req, res) => {
+    const authStatus = {
+      sessionId: req.sessionID,
+      hasSession: !!req.session,
+      adminAuthenticated: req.session?.authenticated === true,
+      crmAuthenticated: req.session?.crmAuthenticated === true,
+      adminUser: req.session?.user ? {
+        id: req.session.user.id,
+        username: req.session.user.username,
+        role: req.session.user.role
+      } : null,
+      crmUser: req.session?.crmUser ? {
+        id: req.session.crmUser.id,
+        username: req.session.crmUser.username,
+        role: req.session.crmUser.role
+      } : null,
+      isAuthenticated: !!(req.session?.authenticated || req.session?.crmAuthenticated),
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('🧪 SHERLOCK v1.0 Auth Test:', authStatus);
+
+    res.json({
+      success: true,
+      message: "Authentication test endpoint",
+      authStatus
+    });
+  });
+
   // Register essential CRM routes (core functionality only)
-  registerCrmRoutes(app, requireAuth); // Pass requireAuth here
+  registerCrmRoutes(app, authMiddleware); // Pass authMiddleware here
 
   // Register Settings routes (core system settings)
   registerSettingsRoutes(app);
 
   // SHERLOCK v18.4: Register STANDARDIZED Invoice Routes - eliminates 11,117,500 تومان discrepancy
-  registerStandardizedInvoiceRoutes(app, requireAuth, storage);
+  registerStandardizedInvoiceRoutes(app, authMiddleware, storage);
 
   // Register maintenance and monitoring routes
   registerMaintenanceRoutes(app);
@@ -109,21 +171,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Previously imported and used directly:
   // const unifiedFinancialRoutes = (await import('./routes/unified-financial-routes.js')).default;
   // app.use('/api/unified-financial', unifiedFinancialRoutes);
-  registerUnifiedFinancialRoutes(app, requireAuth);
+  registerUnifiedFinancialRoutes(app, authMiddleware);
 
 
   // SHERLOCK v18.4: آمار یکپارچه واحد - جایگزین همه سیستم‌های آماری موازی
   // Previously imported and used directly:
   // const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
   // app.use("/api/unified-statistics", unifiedStatisticsRoutes);
-  registerUnifiedStatisticsRoutes(app, requireAuth);
+  registerUnifiedStatisticsRoutes(app, authMiddleware);
 
   // Register database optimization routes
   app.use('/api/database-optimization', databaseOptimizationRoutes);
 
+  // SHERLOCK v1.0: Session Recovery and Debug Endpoint
+  app.get("/api/auth/session-debug", (req, res) => {
+    const sessionInfo = {
+      sessionId: req.sessionID,
+      hasSession: !!req.session,
+      adminAuth: req.session?.authenticated,
+      crmAuth: req.session?.crmAuthenticated,
+      adminUser: req.session?.user ? {
+        id: req.session.user.id,
+        username: req.session.user.username,
+        role: req.session.user.role
+      } : null,
+      crmUser: req.session?.crmUser ? {
+        id: req.session.crmUser.id,
+        username: req.session.crmUser.username,
+        role: req.session.crmUser.role
+      } : null,
+      cookieSettings: req.session?.cookie ? {
+        secure: req.session.cookie.secure,
+        httpOnly: req.session.cookie.httpOnly,
+        maxAge: req.session.cookie.maxAge
+      } : null,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('🔍 SHERLOCK v1.0 Session Debug:', sessionInfo);
+
+    res.json({
+      success: true,
+      sessionInfo,
+      serverTime: new Date().toISOString()
+    });
+  });
 
   // xAI Grok Configuration API
-  app.post("/api/settings/xai-grok/configure", requireAuth, async (req, res) => {
+  app.post("/api/settings/xai-grok/configure", authMiddleware, async (req, res) => {
     try {
       const { apiKey } = req.body;
 
@@ -131,22 +226,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "کلید API الزامی است" });
       }
 
-      // Update XAI Grok engine configuration  
+      // Update XAI Grok engine configuration
       xaiGrokEngine.updateConfiguration(apiKey);
 
       // Save to settings
       await storage.updateSetting('XAI_API_KEY', apiKey);
 
-      res.json({ 
-        success: true, 
-        message: "تنظیمات xAI Grok ذخیره شد" 
+      res.json({
+        success: true,
+        message: "تنظیمات xAI Grok ذخیره شد"
       });
     } catch (error) {
       res.status(500).json({ error: "خطا در ذخیره تنظیمات" });
     }
   });
 
-  app.post("/api/settings/xai-grok/test", requireAuth, async (req, res) => {
+  app.post("/api/settings/xai-grok/test", authMiddleware, async (req, res) => {
     try {
       const result = await xaiGrokEngine.testConnection();
       res.json(result);
@@ -189,8 +284,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       (req.session as any).role = adminUser.role || 'ADMIN';
       (req.session as any).permissions = adminUser.permissions || [];
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: "ورود موفقیت‌آمیز",
         user: {
           id: adminUser.id,
@@ -221,15 +316,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/check", (req, res) => {
     if ((req.session as any)?.authenticated) {
-      res.json({ 
-        authenticated: true, 
-        user: { 
-          id: (req.session as any).userId, 
+      res.json({
+        authenticated: true,
+        user: {
+          id: (req.session as any).userId,
           username: (req.session as any).username,
           role: (req.session as any).role || 'ADMIN',
           permissions: (req.session as any).permissions || [],
           hasFullAccess: (req.session as any).role === 'SUPER_ADMIN' || (Array.isArray((req.session as any).permissions) && (req.session as any).permissions.includes('FULL_ACCESS'))
-        } 
+        }
       });
     } else {
       res.status(401).json({ authenticated: false });
@@ -237,7 +332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard API - Protected
-  app.get("/api/dashboard", requireAuth, async (req, res) => {
+  app.get("/api/dashboard", authMiddleware, async (req, res) => {
     try {
       const dashboardData = await storage.getDashboardData();
       res.json(dashboardData);
@@ -250,7 +345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Available at: /api/unified-financial/debtors
 
   // Real-time Data Synchronization API - SHERLOCK v1.0 Core Feature
-  app.get("/api/sync/status", requireAuth, async (req, res) => {
+  app.get("/api/sync/status", authMiddleware, async (req, res) => {
     try {
       const representatives = await storage.getRepresentatives();
       const invoices = await storage.getInvoices();
@@ -283,7 +378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/sync/force-update", requireAuth, async (req, res) => {
+  app.post("/api/sync/force-update", authMiddleware, async (req, res) => {
     try {
       const startTime = Date.now();
 
@@ -321,7 +416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Representatives API - Protected
-  app.get("/api/representatives", requireAuth, async (req, res) => {
+  app.get("/api/representatives", authMiddleware, async (req, res) => {
     try {
       const representatives = await storage.getRepresentatives();
       res.json(representatives);
@@ -332,7 +427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Representatives Statistics API - SHERLOCK v1.0 CRITICAL FIX (MOVED BEFORE :code route)
   // SHERLOCK v11.0: Synchronized Representatives Statistics with Batch-Based Active Count
-  app.get("/api/representatives/statistics", requireAuth, async (req, res) => {
+  app.get("/api/representatives/statistics", authMiddleware, async (req, res) => {
     try {
       const representatives = await storage.getRepresentatives();
 
@@ -345,7 +440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         inactiveCount: representatives.filter(rep => !rep.isActive).length,
         totalSales: representatives.reduce((sum, rep) => sum + parseFloat(rep.totalSales || "0"), 0),
         totalDebt: representatives.reduce((sum, rep) => sum + parseFloat(rep.totalDebt || "0"), 0),
-        avgPerformance: representatives.length > 0 ? 
+        avgPerformance: representatives.length > 0 ?
           representatives.reduce((sum, rep) => sum + parseFloat(rep.totalSales || "0"), 0) / representatives.length : 0
       };
 
@@ -357,7 +452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/representatives/:code", requireAuth, async (req, res) => {
+  app.get("/api/representatives/:code", authMiddleware, async (req, res) => {
     try {
       const representative = await storage.getRepresentativeByCode(req.params.code);
       if (!representative) {
@@ -378,7 +473,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/representatives", requireAuth, async (req, res) => {
+  app.post("/api/representatives", authMiddleware, async (req, res) => {
     try {
       const validatedData = insertRepresentativeSchema.parse(req.body);
       const representative = await storage.createRepresentative(validatedData);
@@ -392,7 +487,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/representatives/:id", requireAuth, async (req, res) => {
+  app.put("/api/representatives/:id", authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const representative = await storage.updateRepresentative(id, req.body);
@@ -402,7 +497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/representatives/:id", requireAuth, async (req, res) => {
+  app.delete("/api/representatives/:id", authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteRepresentative(id);
@@ -415,7 +510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
   // Admin Data Management API - Protected
-  app.get("/api/admin/data-counts", requireAuth, async (req, res) => {
+  app.get("/api/admin/data-counts", authMiddleware, async (req, res) => {
     try {
       const counts = await storage.getDataCounts();
       res.json(counts);
@@ -425,7 +520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/reset-data", requireAuth, async (req, res) => {
+  app.post("/api/admin/reset-data", authMiddleware, async (req, res) => {
     try {
       const resetOptions = req.body;
 
@@ -561,7 +656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sales Partners API - Protected
-  app.get("/api/sales-partners", requireAuth, async (req, res) => {
+  app.get("/api/sales-partners", authMiddleware, async (req, res) => {
     try {
       const partners = await storage.getSalesPartners();
       res.json(partners);
@@ -570,7 +665,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/sales-partners/statistics", requireAuth, async (req, res) => {
+  app.get("/api/sales-partners/statistics", authMiddleware, async (req, res) => {
     try {
       const stats = await storage.getSalesPartnersStatistics();
       res.json(stats);
@@ -580,7 +675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SHERLOCK v12.4: Manual Invoices API - Dedicated endpoint for manual invoices management
-  app.get("/api/invoices/manual", requireAuth, async (req, res) => {
+  app.get("/api/invoices/manual", authMiddleware, async (req, res) => {
     try {
       console.log('📋 SHERLOCK v12.4: Fetching manual invoices');
       const page = parseInt(req.query.page as string) || 1;
@@ -605,7 +700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SHERLOCK v12.4: Manual Invoices Statistics
-  app.get("/api/invoices/manual/statistics", requireAuth, async (req, res) => {
+  app.get("/api/invoices/manual/statistics", authMiddleware, async (req, res) => {
     try {
       const stats = await storage.getManualInvoicesStatistics();
       res.json(stats);
@@ -615,7 +710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/sales-partners/:id", requireAuth, async (req, res) => {
+  app.get("/api/sales-partners/:id", authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const partner = await storage.getSalesPartner(id);
@@ -635,7 +730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/sales-partners", requireAuth, async (req, res) => {
+  app.post("/api/sales-partners", authMiddleware, async (req, res) => {
     try {
       const validatedData = insertSalesPartnerSchema.parse(req.body);
       const partner = await storage.createSalesPartner(validatedData);
@@ -649,7 +744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/sales-partners/:id", requireAuth, async (req, res) => {
+  app.put("/api/sales-partners/:id", authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const partner = await storage.updateSalesPartner(id, req.body);
@@ -659,7 +754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/sales-partners/:id", requireAuth, async (req, res) => {
+  app.delete("/api/sales-partners/:id", authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await storage.deleteSalesPartner(id);
@@ -670,7 +765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Payments API - Protected (ادغام شده با مدیریت پرداخت)
-  app.get("/api/payments", requireAuth, async (req, res) => {
+  app.get("/api/payments", authMiddleware, async (req, res) => {
     try {
       const payments = await storage.getPayments();
       res.json(payments);
@@ -680,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SHERLOCK v1.0 PAYMENT DELETION API - حذف پرداخت با همگام‌سازی کامل مالی
-  app.delete("/api/payments/:id", requireAuth, async (req, res) => {
+  app.delete("/api/payments/:id", authMiddleware, async (req, res) => {
     try {
       console.log('🗑️ SHERLOCK v1.0: حذف امن پرداخت');
       const paymentId = parseInt(req.params.id);
@@ -726,8 +821,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log(`✅ پرداخت ${paymentId} با موفقیت حذف شد و اطلاعات مالی همگام‌سازی شدند`);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: "پرداخت با موفقیت حذف شد و تمام اطلاعات مالی به‌روزرسانی شدند",
         deletedPayment: {
           id: paymentId,
@@ -742,7 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/payments/statistics", requireAuth, async (req, res) => {
+  app.get("/api/payments/statistics", authMiddleware, async (req, res) => {
     try {
       const stats = await storage.getPaymentStatistics();
       res.json(stats);
@@ -751,7 +846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/payments/representative/:id", requireAuth, async (req, res) => {
+  app.get("/api/payments/representative/:id", authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const payments = await storage.getPaymentsByRepresentative(id);
@@ -761,7 +856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/payments", requireAuth, async (req, res) => {
+  app.post("/api/payments", authMiddleware, async (req, res) => {
     try {
       const validatedData = insertPaymentSchema.parse(req.body);
       const payment = await storage.createPayment(validatedData);
@@ -781,7 +876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/payments/:id", requireAuth, async (req, res) => {
+  app.put("/api/payments/:id", authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const payment = await storage.updatePayment(id, req.body);
@@ -791,7 +886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/payments/:id/allocate", requireAuth, async (req, res) => {
+  app.post("/api/payments/:id/allocate", authMiddleware, async (req, res) => {
     try {
       const paymentId = parseInt(req.params.id);
       const { invoiceId } = req.body;
@@ -805,7 +900,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
   // AI Assistant API - Protected (SHERLOCK v1.0 Intelligent System)
-  app.get("/api/ai/status", requireAuth, async (req, res) => {
+  app.get("/api/ai/status", authMiddleware, async (req, res) => {
     try {
       const aiStatus = await xaiGrokEngine.checkEngineStatus();
       res.json({
@@ -820,7 +915,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/profile/:id", requireAuth, async (req, res) => {
+  app.post("/api/ai/profile/:id", authMiddleware, async (req, res) => {
     try {
       const representativeId = parseInt(req.params.id);
       const representative = await storage.getRepresentative(representativeId);
@@ -846,7 +941,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/insights/:id", requireAuth, async (req, res) => {
+  app.post("/api/ai/insights/:id", authMiddleware, async (req, res) => {
     try {
       const representativeId = parseInt(req.params.id);
       const representative = await storage.getRepresentative(representativeId);
@@ -869,13 +964,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 🗑️ SHERLOCK v18.2: LEGACY REMOVED - Use detailed invoices endpoint instead
 
   // Unpaid Invoices by Representative API - SHERLOCK v1.0 CRITICAL FIX
-  app.get("/api/invoices/unpaid/:representativeId", requireAuth, async (req, res) => {
+  app.get("/api/invoices/unpaid/:representativeId", authMiddleware, async (req, res) => {
     try {
       const representativeId = parseInt(req.params.representativeId);
       const invoices = await storage.getInvoicesByRepresentative(representativeId);
 
       // SHERLOCK v11.5: Enhanced filter to include partial invoices
-      const unpaidInvoices = invoices.filter(invoice => 
+      const unpaidInvoices = invoices.filter(invoice =>
         invoice.status === 'unpaid' || invoice.status === 'overdue' || invoice.status === 'partial'
       );
 
@@ -886,7 +981,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/invoices/telegram-pending", requireAuth, async (req, res) => {
+  app.get("/api/invoices/telegram-pending", authMiddleware, async (req, res) => {
     try {
       const invoices = await storage.getInvoicesForTelegram();
       res.json(invoices);
@@ -897,7 +992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // 🗑️ SHERLOCK v18.4: LEGACY ENDPOINT DEPRECATED - 11,117,500 تومان اختلاف کشف شد
   // استفاده از /api/invoices/generate-standard به جای این endpoint
-  app.post("/api/invoices/generate", requireAuth, upload.single('usageFile'), async (req: MulterRequest, res) => {
+  app.post("/api/invoices/generate", authMiddleware, upload.single('usageFile'), async (req: MulterRequest, res) => {
     res.status(301).json({
       error: "این endpoint به سیستم استاندارد منتقل شده است",
       message: "لطفاً از /api/invoices/generate-standard استفاده کنید",
@@ -908,7 +1003,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // فاز ۲: Manual invoice creation API - ایجاد فاکتور دستی
-  app.post("/api/invoices/create-manual", requireAuth, async (req, res) => {
+  app.post("/api/invoices/create-manual", authMiddleware, async (req, res) => {
     try {
       console.log('🔧 فاز ۲: ایجاد فاکتور دستی');
       const validatedData = insertInvoiceSchema.parse(req.body);
@@ -923,7 +1018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoice = await storage.createInvoice({
         ...validatedData,
         status: validatedData.status || "unpaid",
-        usageData: validatedData.usageData || { 
+        usageData: validatedData.usageData || {
           type: "manual",
           description: "فاکتور ایجاد شده به صورت دستی",
           createdBy: (req.session as any)?.user?.username || 'admin',
@@ -965,7 +1060,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // فاز ۲: Invoice editing API - ویرایش فاکتور
-  app.put("/api/invoices/:id", requireAuth, async (req, res) => {
+  app.put("/api/invoices/:id", authMiddleware, async (req, res) => {
     try {
       console.log('🔧 فاز ۲: ویرایش فاکتور');
       const invoiceId = parseInt(req.params.id);
@@ -1011,7 +1106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // MISSING API: Get all invoices - SHERLOCK v12.1 CRITICAL FIX
-  app.get("/api/invoices", requireAuth, async (req, res) => {
+  app.get("/api/invoices", authMiddleware, async (req, res) => {
     try {
       console.log('📋 SHERLOCK v12.1: Fetching all invoices for main invoices page');
       const startTime = Date.now();
@@ -1028,8 +1123,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // MISSING API: Get invoices with batch info - SHERLOCK v12.1 CRITICAL FIX  
-  app.get("/api/invoices/with-batch-info", requireAuth, async (req, res) => {
+  // MISSING API: Get invoices with batch info - SHERLOCK v12.1 CRITICAL FIX
+  app.get("/api/invoices/with-batch-info", authMiddleware, async (req, res) => {
     try {
       console.log('📋 SHERLOCK v12.1: دریافت کامل فاکتورها با pagination صحیح');
 
@@ -1042,7 +1137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoices = await storage.getInvoices();
       const representatives = await storage.getRepresentatives();
 
-      // Create lookup maps for performance  
+      // Create lookup maps for performance
       const repMap = new Map(representatives.map(rep => [rep.id, rep]));
 
       // Enhance invoices with additional info FIRST
@@ -1116,7 +1211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // MISSING API: Invoice statistics - SHERLOCK v12.1 ENHANCEMENT
-  app.get("/api/invoices/statistics", requireAuth, async (req, res) => {
+  app.get("/api/invoices/statistics", authMiddleware, async (req, res) => {
     try {
       console.log('📊 SHERLOCK v12.1: Calculating invoice statistics');
 
@@ -1149,7 +1244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SHERLOCK v12.3: Send invoices to Telegram - Complete Implementation
-  app.post("/api/invoices/send-telegram", requireAuth, async (req, res) => {
+  app.post("/api/invoices/send-telegram", authMiddleware, async (req, res) => {
     try {
       console.log('📨 SHERLOCK v12.3: Sending invoices to Telegram');
       const { invoiceIds } = req.body;
@@ -1175,8 +1270,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!botToken || !chatId) {
         console.error('❌ Missing Telegram credentials');
-        return res.status(400).json({ 
-          error: "تنظیمات تلگرام کامل نیست. لطفاً Bot Token و Chat ID را در تنظیمات وارد کنید." 
+        return res.status(400).json({
+          error: "تنظیمات تلگرام کامل نیست. لطفاً Bot Token و Chat ID را در تنظیمات وارد کنید."
         });
       }
 
@@ -1264,7 +1359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // فاز ۲: Delete invoice API - حذف فاکتور با همگام‌سازی کامل مالی
-  app.delete("/api/invoices/:id", requireAuth, async (req, res) => {
+  app.delete("/api/invoices/:id", authMiddleware, async (req, res) => {
     try {
       console.log('🔧 فاز ۲: حذف امن فاکتور');
       const invoiceId = parseInt(req.params.id);
@@ -1306,8 +1401,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log(`✅ فاکتور ${invoice.invoiceNumber} با موفقیت حذف شد و اطلاعات مالی همگام‌سازی شدند`);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: "فاکتور با موفقیت حذف شد و اطلاعات مالی به‌روزرسانی شدند",
         deletedInvoice: {
           id: invoiceId,
@@ -1322,7 +1417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // فاز ۲: Get single invoice details API
-  app.get("/api/invoices/:id", requireAuth, async (req, res) => {
+  app.get("/api/invoices/:id", authMiddleware, async (req, res) => {
     try {
       const invoiceId = parseInt(req.params.id);
       if (isNaN(invoiceId)) {
@@ -1349,7 +1444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SHERLOCK v12.1: Enhanced pagination and statistics for invoices page
-  app.get("/api/invoices/export", requireAuth, async (req, res) => {
+  app.get("/api/invoices/export", authMiddleware, async (req, res) => {
     try {
       console.log('📄 SHERLOCK v12.1: Exporting invoices to Excel/CSV');
 
@@ -1363,7 +1458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'مبلغ': invoice.amount,
         'تاریخ صدور': invoice.issueDate,
         'تاریخ سررسید': invoice.dueDate,
-        'وضعیت': invoice.status === 'paid' ? 'پرداخت شده' : 
+        'وضعیت': invoice.status === 'paid' ? 'پرداخت شده' :
                   invoice.status === 'partial' ? 'پرداخت جزئی' : 'پرداخت نشده',
         'ارسال به تلگرام': invoice.sentToTelegram ? 'ارسال شده' : 'ارسال نشده',
         'تاریخ ایجاد': invoice.createdAt
@@ -1384,7 +1479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // فاز ۳: Payment Synchronization API Routes
 
   // Get unallocated payments API
-  app.get("/api/payments/unallocated", requireAuth, async (req, res) => {
+  app.get("/api/payments/unallocated", authMiddleware, async (req, res) => {
     try {
       const representativeId = req.query.representativeId ? parseInt(req.query.representativeId as string) : undefined;
       const unallocatedPayments = await storage.getUnallocatedPayments(representativeId);
@@ -1397,7 +1492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Auto-allocate payments API
-  app.post("/api/payments/auto-allocate/:representativeId", requireAuth, async (req, res) => {
+  app.post("/api/payments/auto-allocate/:representativeId", authMiddleware, async (req, res) => {
     try {
       const representativeId = parseInt(req.params.representativeId);
       const { amount, paymentDate, description, allocations } = req.body;
@@ -1441,8 +1536,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       invalidateCrmCache();
       console.log('🔄 CRM cache invalidated after payment creation for real-time sync');
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         payment,
         allocatedCount: allocations?.length || 0,
         message: "پرداخت با موفقیت ثبت و تخصیص داده شد"
@@ -1454,7 +1549,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // CRM debt synchronization endpoint - Enhanced Financial Synchronization
-  app.post("/api/crm/representatives/:id/sync-debt", requireAuth, async (req, res) => {
+  app.post("/api/crm/representatives/:id/sync-debt", authMiddleware, async (req, res) => {
     try {
       const { id } = req.params;
       const { reason, invoiceId, amountChange, timestamp } = req.body;
@@ -1465,8 +1560,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const representativeId = parseInt(id);
 
       // Calculate total unpaid invoices for this representative
-      const unpaidResult = await db.select({ 
-        totalDebt: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
+      const unpaidResult = await db.select({
+        totalDebt: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`
       }).from(invoices).where(
         and(
           eq(invoices.representativeId, representativeId),
@@ -1475,8 +1570,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Calculate total sales (all invoices)
-      const salesResult = await db.select({ 
-        totalSales: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
+      const salesResult = await db.select({
+        totalSales: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`
       }).from(invoices).where(eq(invoices.representativeId, representativeId));
 
       const actualTotalDebt = unpaidResult[0]?.totalDebt || "0";
@@ -1506,33 +1601,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      console.log('Debt synchronization completed:', { 
-        representativeId, 
-        actualTotalDebt, 
-        actualTotalSales 
+      console.log('Debt synchronization completed:', {
+        representativeId,
+        actualTotalDebt,
+        actualTotalSales
       });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: "همگام‌سازی مالی کامل انجام شد",
-        data: { 
-          invoiceId, 
-          amountChange, 
+        data: {
+          invoiceId,
+          amountChange,
           totalDebt: actualTotalDebt,
           totalSales: actualTotalSales
         }
       });
     } catch (error: any) {
       console.error('Debt synchronization failed:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "خطا در همگام‌سازی بدهی",
-        details: error.message 
+        details: error.message
       });
     }
   });
 
   // Dashboard statistics refresh endpoint
-  app.post("/api/dashboard/refresh-stats", requireAuth, async (req, res) => {
+  app.post("/api/dashboard/refresh-stats", authMiddleware, async (req, res) => {
     try {
       const { reason } = req.body;
 
@@ -1558,8 +1653,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: "آمار داشبورد بروزرسانی شد",
         stats: {
           totalRevenue,
@@ -1576,7 +1671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Manual payment allocation API
   // SHERLOCK v11.5: Manual payment allocation API with real-time status calculation
-  app.post("/api/payments/allocate", requireAuth, async (req, res) => {
+  app.post("/api/payments/allocate", authMiddleware, async (req, res) => {
     try {
       const { paymentId, invoiceId } = req.body;
 
@@ -1611,7 +1706,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // SHERLOCK v11.5: CRITICAL - Batch Invoice Status Recalculation API
-  app.post("/api/invoices/recalculate-statuses", requireAuth, async (req, res) => {
+  app.post("/api/invoices/recalculate-statuses", authMiddleware, async (req, res) => {
     try {
       console.log('🔧 SHERLOCK v11.5: Starting batch invoice status recalculation...');
       const { representativeId, invoiceIds } = req.body;
@@ -1690,7 +1785,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Payment allocation summary API
-  app.get("/api/payments/allocation-summary/:representativeId", requireAuth, async (req, res) => {
+  app.get("/api/payments/allocation-summary/:representativeId", authMiddleware, async (req, res) => {
     try {
       const representativeId = parseInt(req.params.representativeId);
       const summary = await storage.getPaymentAllocationSummary(representativeId);
@@ -1712,7 +1807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // 🗑️ SHERLOCK v18.2: LEGACY REMOVED - Use standardized payment processing endpoints
 
-  app.put("/api/payments/:id/allocate", requireAuth, async (req, res) => {
+  app.put("/api/payments/:id/allocate", authMiddleware, async (req, res) => {
     try {
       const paymentId = parseInt(req.params.id);
       const { invoiceId } = req.body;
@@ -1725,7 +1820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // فاز ۱: Invoice Batches API - مدیریت دوره‌ای فاکتورها
-  app.get("/api/invoice-batches", requireAuth, async (req, res) => {
+  app.get("/api/invoice-batches", authMiddleware, async (req, res) => {
     try {
       const batches = await storage.getInvoiceBatches();
       res.json(batches);
@@ -1735,7 +1830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/invoice-batches/:id", requireAuth, async (req, res) => {
+  app.get("/api/invoice-batches/:id", authMiddleware, async (req, res) => {
     try {
       const batchId = parseInt(req.params.id);
       const batch = await storage.getInvoiceBatch(batchId);
@@ -1761,7 +1856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/invoice-batches", requireAuth, async (req, res) => {
+  app.post("/api/invoice-batches", authMiddleware, async (req, res) => {
     try {
       const validatedData = insertInvoiceBatchSchema.parse(req.body);
 
@@ -1782,7 +1877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/invoice-batches/:id", requireAuth, async (req, res) => {
+  app.put("/api/invoice-batches/:id", authMiddleware, async (req, res) => {
     try {
       const batchId = parseInt(req.params.id);
       const updateData = req.body;
@@ -1795,14 +1890,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/invoice-batches/:id/complete", requireAuth, async (req, res) => {
+  app.post("/api/invoice-batches/:id/complete", authMiddleware, async (req, res) => {
     try {
       const batchId = parseInt(req.params.id);
       await storage.completeBatch(batchId);
 
       const updatedBatch = await storage.getInvoiceBatch(batchId);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         batch: updatedBatch,
         message: "دسته فاکتور با موفقیت تکمیل شد"
       });
@@ -1815,7 +1910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
   // Activity Logs API
-  app.get("/api/activity-logs", requireAuth, async (req, res) => {
+  app.get("/api/activity-logs", authMiddleware, async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
       const logs = await storage.getActivityLogs(limit);
@@ -1826,7 +1921,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Settings API - Protected
-  app.get("/api/settings/:key", requireAuth, async (req, res) => {
+  app.get("/api/settings/:key", authMiddleware, async (req, res) => {
     try {
       const setting = await storage.getSetting(req.params.key);
       res.json(setting);
@@ -1835,7 +1930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/settings/:key", requireAuth, async (req, res) => {
+  app.put("/api/settings/:key", authMiddleware, async (req, res) => {
     try {
       const { value } = req.body;
       const setting = await storage.updateSetting(req.params.key, value);
@@ -1848,7 +1943,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // xAI Grok Assistant API
   // 🗑️ SHERLOCK v18.2: LEGACY AI TEST REMOVED - Use /api/settings/xai-grok/test instead
 
-  app.post("/api/ai/analyze-financial", requireAuth, async (req, res) => {
+  app.post("/api/ai/analyze-financial", authMiddleware, async (req, res) => {
     try {
       const dashboardData = await storage.getDashboardData();
 
@@ -1865,7 +1960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/analyze-representative", requireAuth, async (req, res) => {
+  app.post("/api/ai/analyze-representative", authMiddleware, async (req, res) => {
     try {
       const { representativeCode } = req.body;
       const representative = await storage.getRepresentativeByCode(representativeCode);
@@ -1881,7 +1976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/question", requireAuth, async (req, res) => {
+  app.post("/api/ai/question", authMiddleware, async (req, res) => {
     try {
       const { question } = req.body;
       const answer = await xaiGrokEngine.answerFinancialQuestion(question);
@@ -1891,7 +1986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/generate-report", requireAuth, async (req, res) => {
+  app.post("/api/ai/generate-report", authMiddleware, async (req, res) => {
     try {
       const dashboardData = await storage.getDashboardData();
       const representatives = await storage.getRepresentatives();
@@ -1912,7 +2007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test Telegram connection
-  app.post("/api/test-telegram", requireAuth, async (req, res) => {
+  app.post("/api/test-telegram", authMiddleware, async (req, res) => {
     try {
       console.log('Testing Telegram connection...');
 
@@ -1932,7 +2027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('DB Chat ID exists:', !!chatIdSetting?.value);
 
         if (!botTokenSetting?.value || !chatIdSetting?.value) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             error: "تنظیمات تلگرام کامل نیست - ابتدا توکن ربات و شناسه چت را ذخیره کنید",
             hasEnvToken: !!botToken,
             hasEnvChatId: !!chatId,
@@ -1980,14 +2075,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error(result.description || `Telegram API error: ${response.status}`);
       }
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: "پیام تست با موفقیت ارسال شد",
         telegramResponse: result
       });
     } catch (error: any) {
       console.error('Telegram test error:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: `خطا در تست اتصال تلگرام: ${error.message}`,
         details: error.toString()
       });
@@ -1996,17 +2091,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize default settings on first run
   // Invoice Edit Routes
-  app.post("/api/invoices/edit", requireAuth, async (req, res) => {
+  app.post("/api/invoices/edit", authMiddleware, async (req, res) => {
     try {
-      const { 
-        invoiceId, 
-        originalUsageData, 
-        editedUsageData, 
-        editType, 
+      const {
+        invoiceId,
+        originalUsageData,
+        editedUsageData,
+        editType,
         editReason,
         originalAmount,
         editedAmount,
-        editedBy 
+        editedBy
       } = req.body;
 
       // Validate input
@@ -2029,23 +2124,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         editedAmount: parseFloat(editedAmount.toString())
       });
 
-      res.json({ 
-        success: atomicResult.success, 
+      res.json({
+        success: atomicResult.success,
         editId: atomicResult.editId,
         transactionId: atomicResult.transactionId,
-        message: "فاکتور با موفقیت از طریق تراکنش اتمیک ویرایش شد" 
+        message: "فاکتور با موفقیت از طریق تراکنش اتمیک ویرایش شد"
       });
 
     } catch (error: any) {
       console.error('خطا در ویرایش فاکتور:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'خطا در ویرایش فاکتور',
-        details: error.message 
+        details: error.message
       });
     }
   });
 
-  app.get("/api/invoices/:id/edit-history", requireAuth, async (req, res) => {
+  app.get("/api/invoices/:id/edit-history", authMiddleware, async (req, res) => {
     try {
       const invoiceId = parseInt(req.params.id);
 
@@ -2058,14 +2153,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error('خطا در دریافت تاریخچه ویرایش:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'خطا در دریافت تاریخچه ویرایش',
-        details: error.message 
+        details: error.message
       });
     }
   });
 
-  app.get("/api/invoices/:id/usage-details", requireAuth, async (req, res) => {
+  app.get("/api/invoices/:id/usage-details", authMiddleware, async (req, res) => {
     try {
       const invoiceId = parseInt(req.params.id);
 
@@ -2095,50 +2190,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error('خطا در دریافت جزئیات مصرف:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'خطا در دریافت جزئیات مصرف',
-        details: error.message 
+        details: error.message
       });
     }
   });
 
   // Financial transaction management API routes
-  app.get("/api/financial/transactions", requireAuth, async (req, res) => {
+  app.get("/api/financial/transactions", authMiddleware, async (req, res) => {
     try {
       const transactions = await storage.getFinancialTransactions();
       res.json(transactions);
     } catch (error: any) {
       console.error('خطا در دریافت تراکنش‌های مالی:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'خطا در دریافت تراکنش‌های مالی',
-        details: error.message 
+        details: error.message
       });
     }
   });
 
-  app.get("/api/financial/constraints", requireAuth, async (req, res) => {
+  app.get("/api/financial/constraints", authMiddleware, async (req, res) => {
     try {
       // Use a different method that exists in storage
       const constraints = await storage.getFinancialTransactions();
       res.json({ constraints: [], message: "عملیات موقتاً غیرفعال است" });
     } catch (error: any) {
       console.error('خطا در دریافت محدودیت‌های یکپارچگی:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'خطا در دریافت محدودیت‌های یکپارچگی',
-        details: error.message 
+        details: error.message
       });
     }
   });
 
-  app.post("/api/financial/reconcile", requireAuth, async (req, res) => {
+  app.post("/api/financial/reconcile", authMiddleware, async (req, res) => {
     try {
       const reconcileResult = await storage.reconcileFinancialData();
       res.json(reconcileResult);
     } catch (error: any) {
       console.error('خطا در هماهنگی داده‌های مالی:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'خطا در هماهنگی داده‌های مالی',
-        details: error.message 
+        details: error.message
       });
     }
   });
@@ -2174,7 +2269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====== FINANCIAL TRANSACTIONS API (CLOCK MECHANISM) ======
-  app.get("/api/transactions", requireAuth, async (req, res) => {
+  app.get("/api/transactions", authMiddleware, async (req, res) => {
     try {
       const { representativeId, status } = req.query;
 
@@ -2195,7 +2290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/transactions/:transactionId", requireAuth, async (req, res) => {
+  app.get("/api/transactions/:transactionId", authMiddleware, async (req, res) => {
     try {
       const { transactionId } = req.params;
       const transaction = await storage.getFinancialTransaction(transactionId);
@@ -2211,14 +2306,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/transactions/:transactionId/rollback", requireAuth, async (req, res) => {
+  app.post("/api/transactions/:transactionId/rollback", authMiddleware, async (req, res) => {
     try {
       const { transactionId } = req.params;
       await storage.rollbackTransaction(transactionId);
 
-      res.json({ 
-        success: true, 
-        message: `تراکنش ${transactionId} با موفقیت برگردانده شد` 
+      res.json({
+        success: true,
+        message: `تراکنش ${transactionId} با موفقیت برگردانده شد`
       });
     } catch (error: any) {
       console.error('خطا در برگرداندن تراکنش:', error);
@@ -2227,7 +2322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====== DATA INTEGRITY CONSTRAINTS API (CLOCK PRECISION) ======
-  app.get("/api/constraints/violations", requireAuth, async (req, res) => {
+  app.get("/api/constraints/violations", authMiddleware, async (req, res) => {
     try {
       const violations = await storage.getConstraintViolations();
       res.json(violations);
@@ -2237,7 +2332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/constraints/validate", requireAuth, async (req, res) => {
+  app.post("/api/constraints/validate", authMiddleware, async (req, res) => {
     try {
       const { entityType, entityId } = req.body;
 
@@ -2253,14 +2348,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/constraints/:constraintId/fix", requireAuth, async (req, res) => {
+  app.post("/api/constraints/:constraintId/fix", authMiddleware, async (req, res) => {
     try {
       const constraintId = parseInt(req.params.constraintId);
       const fixed = await storage.fixConstraintViolation(constraintId);
 
-      res.json({ 
-        success: fixed, 
-        message: fixed ? "محدودیت با موفقیت رفع شد" : "امکان رفع خودکار محدودیت وجود ندارد" 
+      res.json({
+        success: fixed,
+        message: fixed ? "محدودیت با موفقیت رفع شد" : "امکان رفع خودکار محدودیت وجود ندارد"
       });
     } catch (error: any) {
       console.error('خطا در رفع محدودیت:', error);
@@ -2269,16 +2364,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ====== FINANCIAL RECONCILIATION API (CLOCK SYNCHRONIZATION) ======
-  app.post("/api/financial/reconcile", requireAuth, async (req, res) => {
+  app.post("/api/financial/reconcile", authMiddleware, async (req, res) => {
     try {
       const { representativeId } = req.body;
 
       if (representativeId) {
         // Reconcile specific representative
         await storage.updateRepresentativeFinancials(parseInt(representativeId));
-        res.json({ 
-          success: true, 
-          message: `مالیات نماینده ${representativeId} هماهنگ شد` 
+        res.json({
+          success: true,
+          message: `مالیات نماینده ${representativeId} هماهنگ شد`
         });
       } else {
         // Reconcile all representatives (could be heavy operation)
@@ -2294,8 +2389,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        res.json({ 
-          success: true, 
+        res.json({
+          success: true,
           message: `${processed} نماینده هماهنگ شد`,
           processed,
           total: representatives.length
@@ -2316,29 +2411,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize CRM real-time sync
   // CRM data sync service removed for simplified system
 
-  // Enhanced health check endpoint
+  // Health check endpoint
   app.get("/health", (req, res) => {
-    res.json({ 
-      status: "healthy", 
+    res.json({
+      status: "healthy",
       timestamp: new Date().toISOString(),
-      services: {
-        financial: "running",
-        crm: "running",
-        auth: "running",
-        sync: "simplified"
-      }
+      environment: process.env.NODE_ENV || 'development'
     });
   });
 
   // ====== FINANCIAL INTEGRITY API ======
   // Get financial snapshot for representative
-  app.get("/api/financial-integrity/representative/:id/snapshot", requireAuth, async (req, res) => {
+  app.get("/api/financial-integrity/representative/:id/snapshot", authMiddleware, async (req, res) => {
     try {
       const representativeId = parseInt(req.params.id);
 
       if (!representativeId || isNaN(representativeId)) {
-        return res.status(400).json({ 
-          error: 'شناسه نماینده معتبر نیست' 
+        return res.status(400).json({
+          error: 'شناسه نماینده معتبر نیست'
         });
       }
 
@@ -2349,8 +2439,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .limit(1);
 
       if (!representative.length) {
-        return res.status(404).json({ 
-          error: 'نماینده یافت نشد' 
+        return res.status(404).json({
+          error: 'نماینده یافت نشد'
         });
       }
 
@@ -2417,8 +2507,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error) {
       console.error('Error getting financial integrity snapshot:', error);
-      res.status(500).json({ 
-        error: 'خطا در دریافت اطلاعات مالی' 
+      res.status(500).json({
+        error: 'خطا در دریافت اطلاعات مالی'
       });
     }
   });

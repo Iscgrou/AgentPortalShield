@@ -37,31 +37,43 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
   
   // CRM Authentication Middleware - Enhanced Cross-Panel Support with Session Recovery
   const crmAuthMiddleware = (req: any, res: any, next: any) => {
-    // Check multiple session authentication methods
+    // SHERLOCK v1.0: Enhanced CRM authentication with cross-panel support
     const isCrmAuthenticated = req.session?.crmAuthenticated === true || req.session?.crmUser;
     const isAdminAuthenticated = req.session?.authenticated === true && 
-                                (req.session?.role === 'admin' || req.session?.role === 'ADMIN' || req.session?.role === 'SUPER_ADMIN');
-    const isAuthenticated = isCrmAuthenticated || isAdminAuthenticated;
+                                (req.session?.user?.role === 'admin' || req.session?.user?.role === 'ADMIN' || req.session?.user?.role === 'SUPER_ADMIN');
+    
+    // Additional session recovery mechanisms
+    const hasValidCrmSession = req.session?.crmUser && req.session.crmUser.id;
+    const hasValidAdminSession = req.session?.user && req.session.user.id;
+    
+    const isAuthenticated = isCrmAuthenticated || isAdminAuthenticated || hasValidCrmSession || hasValidAdminSession;
     
     // Enhanced debug logging for production monitoring
     if (!isAuthenticated) {
-      console.log('🔒 CRM Auth Failed:', {
+      console.log('🔒 SHERLOCK v1.0 CRM Auth Failed:', {
         sessionId: req.sessionID,
         hasSession: !!req.session,
         crmAuth: req.session?.crmAuthenticated,
         adminAuth: req.session?.authenticated,
-        userAgent: req.get('User-Agent')?.slice(0, 50),
-        ip: req.ip
+        hasValidCrmSession,
+        hasValidAdminSession,
+        path: req.path,
+        method: req.method,
+        timestamp: new Date().toISOString()
       });
     }
     
     if (isAuthenticated) {
       // Touch session to extend expiry
       req.session.touch();
+      console.log(`✅ SHERLOCK v1.0 CRM Auth Success: ${req.method} ${req.path}`);
       next();
     } else {
+      console.log(`❌ SHERLOCK v1.0 CRM Auth Denied: ${req.method} ${req.path}`);
       res.status(401).json({ 
         error: 'احراز هویت نشده - دسترسی غیرمجاز',
+        path: req.path,
+        method: req.method,
         timestamp: new Date().toISOString(),
         sessionId: req.sessionID 
       });
