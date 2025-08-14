@@ -37,26 +37,31 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
   
   // CRM Authentication Middleware - Enhanced Cross-Panel Support with Session Recovery
   const crmAuthMiddleware = (req: any, res: any, next: any) => {
-    // SHERLOCK v1.0: Enhanced CRM authentication with cross-panel support
-    const isCrmAuthenticated = req.session?.crmAuthenticated === true || req.session?.crmUser;
-    const isAdminAuthenticated = req.session?.authenticated === true && 
-                                (req.session?.user?.role === 'admin' || req.session?.user?.role === 'ADMIN' || req.session?.user?.role === 'SUPER_ADMIN');
+    // SHERLOCK v23.1: Enhanced CRM authentication with proper Admin cross-panel support
+    const isCrmAuthenticated = req.session?.crmAuthenticated === true;
+    const hasValidCrmUser = req.session?.crmUser && req.session.crmUser.id;
     
-    // Additional session recovery mechanisms
-    const hasValidCrmSession = req.session?.crmUser && req.session.crmUser.id;
-    const hasValidAdminSession = req.session?.user && req.session.user.id;
+    // Enhanced Admin authentication check
+    const isAdminAuthenticated = req.session?.authenticated === true;
+    const hasValidAdminUser = req.session?.user && (
+      req.session.user.role === 'admin' || 
+      req.session.user.role === 'ADMIN' || 
+      req.session.user.role === 'SUPER_ADMIN'
+    );
     
-    const isAuthenticated = isCrmAuthenticated || isAdminAuthenticated || hasValidCrmSession || hasValidAdminSession;
+    // Combined authentication validation
+    const isAuthenticated = isCrmAuthenticated || hasValidCrmUser || isAdminAuthenticated || hasValidAdminUser;
     
     // Enhanced debug logging for production monitoring
     if (!isAuthenticated) {
-      console.log('🔒 SHERLOCK v1.0 CRM Auth Failed:', {
+      console.log('🔒 SHERLOCK v23.1 CRM Auth Failed:', {
         sessionId: req.sessionID,
         hasSession: !!req.session,
-        crmAuth: req.session?.crmAuthenticated,
-        adminAuth: req.session?.authenticated,
-        hasValidCrmSession,
-        hasValidAdminSession,
+        crmAuth: isCrmAuthenticated,
+        adminAuth: isAdminAuthenticated,
+        hasValidCrmUser,
+        hasValidAdminUser,
+        userRole: req.session?.user?.role,
         path: req.path,
         method: req.method,
         timestamp: new Date().toISOString()
@@ -66,10 +71,10 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     if (isAuthenticated) {
       // Touch session to extend expiry
       req.session.touch();
-      console.log(`✅ SHERLOCK v1.0 CRM Auth Success: ${req.method} ${req.path}`);
+      console.log(`✅ SHERLOCK v23.1 CRM Auth Success: ${req.method} ${req.path} (Admin: ${hasValidAdminUser}, CRM: ${hasValidCrmUser})`);
       next();
     } else {
-      console.log(`❌ SHERLOCK v1.0 CRM Auth Denied: ${req.method} ${req.path}`);
+      console.log(`❌ SHERLOCK v23.1 CRM Auth Denied: ${req.method} ${req.path}`);
       res.status(401).json({ 
         error: 'احراز هویت نشده - دسترسی غیرمجاز',
         path: req.path,
@@ -510,6 +515,23 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     try {
       const validatedData = insertPaymentSchema.parse(req.body);
 
+      const payment = await storage.createPayment(validatedData);
+      
+      // Auto-allocate to oldest unpaid invoice if representativeId provided
+      if (validatedData.representativeId) {
+        await storage.autoAllocatePaymentToInvoices(payment.id, validatedData.representativeId);
+      }
+      
+      res.json(payment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "داده‌های ورودی نامعتبر", details: error.errors });
+      } else {
+        console.error('CRM Payment creation error:', error);
+        res.status(500).json({ error: "خطا در ایجاد پرداخت" });
+      }
+    }
+  });
 
   // Session Monitoring Endpoint for CRM Administrators
   app.get("/api/crm/auth/session-info", crmAuthMiddleware, (req, res) => {
