@@ -199,8 +199,8 @@ function AuthenticatedRouter() {
     );
   }
 
-  // Show loading state while checking authentication
-  if (authLoading || adminIsLoading) {
+  // Show loading state while checking authentication - Prevent endless loading
+  if ((authLoading || adminIsLoading) && !location.includes('/login') && !location.includes('/auth')) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">

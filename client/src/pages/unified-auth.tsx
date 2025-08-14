@@ -1,5 +1,6 @@
-// 🔐 UNIFIED AUTHENTICATION PAGE - Admin & CRM Login (SHERLOCK v3.0 FIXED)
-import { useState, useEffect } from 'react';
+
+// 🔐 UNIFIED AUTHENTICATION PAGE - Stable Login (SHERLOCK v4.0 FIXED)
+import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,20 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { 
   Shield, 
   Users, 
   Brain, 
-  TrendingUp, 
-  Lock, 
   Eye, 
   EyeOff,
-  AlertTriangle,
-  CheckCircle2,
   Settings,
-  UserCheck
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useCrmAuth } from '@/hooks/use-crm-auth';
@@ -38,7 +33,7 @@ export default function UnifiedAuth() {
   const [location, setLocation] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [loginType, setLoginType] = useState<'detecting' | 'admin' | 'crm'>('detecting');
-  const [pendingRedirect, setPendingRedirect] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   // Get both auth contexts
@@ -49,8 +44,7 @@ export default function UnifiedAuth() {
     register,
     handleSubmit,
     formState: { errors },
-    setValue,
-    watch
+    reset
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -59,27 +53,30 @@ export default function UnifiedAuth() {
     }
   });
 
-  // Detect intended destination from URL
-  useEffect(() => {
-    if (location.startsWith('/crm')) {
-      setPendingRedirect('/crm');
-    } else if (location.startsWith('/dashboard') || location === '/') {
-      setPendingRedirect('/dashboard');
-    }
-  }, [location]);
+  // Stable navigation function
+  const navigateToDestination = useCallback((path: string) => {
+    console.log('🔄 Navigating to:', path);
+    setTimeout(() => {
+      setLocation(path);
+    }, 1500);
+  }, [setLocation]);
 
-  // Set panel type without auto-filling credentials
-  const selectAdminPanel = () => {
+  // Set panel type
+  const selectAdminPanel = useCallback(() => {
     setLoginType('admin');
-    setPendingRedirect('/dashboard');
-  };
+    reset();
+  }, [reset]);
 
-  const selectCrmPanel = () => {
+  const selectCrmPanel = useCallback(() => {
     setLoginType('crm');
-    setPendingRedirect('/crm');
-  };
+    reset();
+  }, [reset]);
 
   const onSubmit = async (data: LoginForm) => {
+    if (isSubmitting) return;
+    
+    setIsSubmitting(true);
+    
     try {
       // Determine login type based on username
       const targetLoginType = data.username === 'mgr' ? 'admin' : 'crm';
@@ -89,56 +86,55 @@ export default function UnifiedAuth() {
         // Admin login
         adminAuth.loginMutation.mutate(data, {
           onSuccess: () => {
-            console.log('Admin login successful, redirecting to:', targetRedirect);
+            console.log('✅ Admin login successful');
             toast({
               title: "ورود موفق",
               description: "به پنل ادمین خوش آمدید",
             });
-            // SHERLOCK v3.0 FIX: Navigate to dashboard after successful login
-            setTimeout(() => setLocation(targetRedirect), 1000);
+            navigateToDestination(targetRedirect);
           },
           onError: (error: any) => {
-            console.error('Admin login error:', error);
+            console.error('❌ Admin login error:', error);
             toast({
               title: "خطا در ورود ادمین",
               description: error.message || "خطا در احراز هویت",
               variant: "destructive",
             });
+            setIsSubmitting(false);
           }
         });
       } else {
         // CRM login
         crmAuth.loginMutation.mutate(data, {
           onSuccess: (response: any) => {
-            console.log('CRM login successful, redirecting to:', targetRedirect);
+            console.log('✅ CRM login successful');
             toast({
               title: "ورود موفق",
               description: "به پنل CRM خوش آمدید",
             });
-            // SHERLOCK v3.0 FIX: Navigate to CRM after successful login
-            setTimeout(() => setLocation(targetRedirect), 1000);
+            navigateToDestination(targetRedirect);
           },
           onError: (error: any) => {
-            console.error('CRM login error:', error);
+            console.error('❌ CRM login error:', error);
             toast({
               title: "خطا در ورود CRM",
               description: error.message || "خطا در احراز هویت",
               variant: "destructive",
             });
+            setIsSubmitting(false);
           }
         });
       }
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('❌ Login error:', error);
       toast({
         title: "خطا در ورود",
         description: "مشکل در برقراری ارتباط با سرور",
         variant: "destructive",
       });
+      setIsSubmitting(false);
     }
   };
-
-  // REMOVED: Auto-redirect logic - Users must login manually each time
 
   return (
     <div className="min-h-screen clay-background relative">
@@ -231,6 +227,7 @@ export default function UnifiedAuth() {
                         type="text"
                         placeholder={loginType === 'admin' ? 'نام کاربری ادمین' : 'نام کاربری CRM'}
                         className="mt-1 bg-white/10 border-white/20 text-white placeholder:text-gray-400 focus:border-blue-400"
+                        disabled={isSubmitting}
                         {...register('username')}
                       />
                       {errors.username && (
@@ -248,12 +245,14 @@ export default function UnifiedAuth() {
                           type={showPassword ? 'text' : 'password'}
                           placeholder="رمز عبور"
                           className="bg-white/10 border-white/20 text-white placeholder:text-gray-400 focus:border-blue-400 pr-10"
+                          disabled={isSubmitting}
                           {...register('password')}
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
                           className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                          disabled={isSubmitting}
                         >
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -267,14 +266,14 @@ export default function UnifiedAuth() {
                   <div className="space-y-4">
                     <Button
                       type="submit"
-                      disabled={adminAuth.loginMutation.isPending || crmAuth.loginMutation.isPending}
+                      disabled={isSubmitting}
                       className={`w-full h-12 font-semibold ${
                         loginType === 'admin' 
                           ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800' 
                           : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800'
                       } text-white border-0`}
                     >
-                      {(adminAuth.loginMutation.isPending || crmAuth.loginMutation.isPending) ? (
+                      {isSubmitting ? (
                         <div className="flex items-center space-x-2">
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                           <span>در حال ورود...</span>
@@ -292,6 +291,7 @@ export default function UnifiedAuth() {
                       onClick={() => setLoginType('detecting')}
                       variant="outline"
                       className="w-full bg-white/5 border-white/20 text-white hover:bg-white/10"
+                      disabled={isSubmitting}
                     >
                       بازگشت به انتخاب پنل
                     </Button>
