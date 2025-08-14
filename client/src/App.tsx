@@ -110,11 +110,11 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 function AuthenticatedRouter() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
-  
+
   // Check if this is a public portal route
   const isPublicPortal = location.startsWith('/portal/') || location.startsWith('/representative/');
   const isCrmRoute = location.startsWith('/crm');
-  
+
   if (isPublicPortal) {
     // 🔒 SECURITY: Completely isolated public portal - no admin access
     return (
@@ -161,7 +161,7 @@ function AuthenticatedRouter() {
       </CrmAuthProvider>
     );
   }
-  
+
   // Show loading state while checking authentication
   if (isLoading) {
     return (
@@ -173,7 +173,7 @@ function AuthenticatedRouter() {
       </div>
     );
   }
-  
+
   // SHERLOCK v3.0 FIX: Always show unified auth for non-authenticated users
   if (!isAuthenticated) {
     return (
@@ -182,14 +182,15 @@ function AuthenticatedRouter() {
       </CrmAuthProvider>
     );
   }
-  
+
   // Show admin panel if authenticated
   return (
     <AdminLayout>
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/dashboard" component={Dashboard} />
-        <Route path="/representatives" component={Representatives} />
+        <Route path="/representatives" element={<Representatives />} />
+        <Route path="/representatives/*" element={<Representatives />} />
         <Route path="/invoices" component={Invoices} />
         <Route path="/invoice-management" component={InvoiceManagement} />
         <Route path="/sales-partners" component={SalesPartners} />

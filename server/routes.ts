@@ -49,6 +49,8 @@ import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-route
 
 // Import database optimization routes registration
 import databaseOptimizationRoutes from './routes/database-optimization-routes.js';
+// Import reports routes registration
+import reportsRoutes from "./routes/reports-routes.js";
 
 
 // Configure multer for file uploads with broader JSON acceptance
@@ -120,6 +122,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register database optimization routes
   app.use('/api/database-optimization', databaseOptimizationRoutes);
+
+  // Register reports routes
+  app.use('/api/reports', reportsRoutes);
 
 
   // xAI Grok Configuration API

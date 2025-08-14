@@ -70,7 +70,90 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-// SHERLOCK v11.0: Updated interface with standardized terminology
+// SHERLOCK v23.0: Enhanced error handling and routing fix
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+
+// Component start with error boundary
+export default function Representatives() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Test query to verify API connection
+  const { data: representatives, isLoading, error } = useQuery({
+    queryKey: ['/api/representatives'],
+    queryFn: async () => {
+      try {
+        console.log('SHERLOCK v23.0: Loading representatives...');
+        return await apiRequest('/api/representatives');
+      } catch (err) {
+        console.error('Representatives API Error:', err);
+        throw err;
+      }
+    }
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-6 text-center">
+        <div className="text-lg">در حال بارگذاری نمایندگان...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle className="text-red-600">خطا در بارگذاری نمایندگان</CardTitle>
+            <CardDescription>
+              {error instanceof Error ? error.message : 'خطای نامشخص'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/representatives'] })}
+              variant="outline"
+            >
+              تلاش مجدد
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>مدیریت نمایندگان</CardTitle>
+          <CardDescription>
+            تعداد نمایندگان: {representatives?.length || 0}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {representatives?.length > 0 ? (
+            <div className="text-green-600">
+              ✅ API نمایندگان در حال کار است - {representatives.length} نماینده یافت شد
+            </div>
+          ) : (
+            <div className="text-orange-500">
+              ⚠️ هیچ نماینده‌ای یافت نشد
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 interface Representative {
   id: number;
   code: string;
