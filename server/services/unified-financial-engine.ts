@@ -543,3 +543,12 @@ export class UnifiedFinancialEngine {
     }
   }
 }
+
+// Export singleton instance for use in other modules
+export const unifiedFinancialEngine = new UnifiedFinancialEngine({
+  query: (sql: string, params?: any[]) => {
+    // This will be properly initialized with actual storage
+    console.log('Storage query:', sql, params);
+    return Promise.resolve([]);
+  }
+});
