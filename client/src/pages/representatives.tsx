@@ -168,8 +168,8 @@ export default function Representatives() {
   };
 
   const { data: representatives = [], isLoading, error } = useQuery<Representative[]>({
-    queryKey: ["/api/crm/representatives"],
-    queryFn: () => apiRequest("/api/crm/representatives"),
+    queryKey: ["/api/representatives"],
+    queryFn: () => apiRequest("/api/representatives"),
     select: (data: any) => {
       console.log('🔍 SHERLOCK v1.0 Representatives data analysis:', {
         dataType: typeof data,
@@ -302,13 +302,13 @@ export default function Representatives() {
   // Create representative mutation
   const createRepresentativeMutation = useMutation({
     mutationFn: async (data: z.infer<typeof representativeFormSchema>) => {
-      return apiRequest("/api/crm/representatives", {
+      return apiRequest("/api/representatives", {
         method: "POST",
         data: data
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
       toast({
         title: "موفقیت",
         description: "نماینده جدید با موفقیت ایجاد شد"
@@ -327,13 +327,13 @@ export default function Representatives() {
   // Update representative mutation
   const updateRepresentativeMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number, data: Partial<z.infer<typeof representativeFormSchema>> }) => {
-      return apiRequest(`/api/crm/representatives/${id}`, {
+      return apiRequest(`/api/representatives/${id}`, {
         method: "PUT",
         data: data
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
       toast({
         title: "موفقیت",
         description: "اطلاعات نماینده بروزرسانی شد"
@@ -351,7 +351,7 @@ export default function Representatives() {
 
   const handleViewDetails = async (rep: Representative) => {
     try {
-      const detailsResponse = await apiRequest(`/api/crm/representatives/${rep.code}`);
+      const detailsResponse = await apiRequest(`/api/representatives/${rep.code}`);
       setSelectedRep({
         ...rep,
         invoices: detailsResponse.invoices || [],
@@ -406,7 +406,7 @@ export default function Representatives() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
     }
   });
@@ -419,7 +419,7 @@ export default function Representatives() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       toast({
@@ -451,7 +451,7 @@ export default function Representatives() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       toast({
@@ -2179,7 +2179,7 @@ function CreatePaymentDialog({
           isAllocated: !!selectedInvoiceId
         };
 
-        await apiRequest("/api/crm/payments", {
+        await apiRequest("/api/payments", {
           method: "POST",
           data: paymentData
         });
@@ -2219,20 +2219,16 @@ function CreatePaymentDialog({
   const performComprehensiveFinancialSync = async () => {
     try {
       // 1. Invalidate all related query caches
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       queryClient.invalidateQueries({ queryKey: [`/api/representatives/${representative.code}`] });
 
       // 2. Force refresh current representative data
-      await queryClient.refetchQueries({ queryKey: [`/api/crm/representatives/${representative.code}`] });
+      await queryClient.refetchQueries({ queryKey: [`/api/representatives/${representative.code}`] });
 
       // 3. Refresh parent component data if available
-      if (window.location.pathname.includes('/crm')) {
-        queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
-      }
+      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
 
       // 4. Sync with admin panel cache if needed
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
@@ -2311,7 +2307,7 @@ function CreatePaymentDialog({
         allocations
       };
 
-      await apiRequest(`/api/crm/payments/auto-allocate/${representative.id}`, {
+      await apiRequest(`/api/payments/auto-allocate/${representative.id}`, {
         method: "POST",
         data: paymentData
       });
@@ -2352,13 +2348,13 @@ function CreatePaymentDialog({
       updateData.totalDebt = "0";
     }
 
-    await apiRequest(`/api/crm/representatives/${representative.id}`, {
+    await apiRequest(`/api/representatives/${representative.id}`, {
       method: "PUT",
       data: updateData
     });
 
-    // Sync with CRM system
-    await apiRequest(`/api/crm/representatives/${representative.id}/sync-debt`, {
+    // Sync with system
+    await apiRequest(`/api/representatives/${representative.id}/sync-debt`, {
       method: "POST",
       data: updateData
     });
