@@ -1,6 +1,6 @@
 /**
  * SHERLOCK v18.2 UNIFIED FINANCIAL ENGINE
- * 
+ *
  * تنها سیستم محاسباتی مالی - جایگزین تمام سیستم‌های موازی
  * Real-time calculations with 100% accuracy guarantee
  */
@@ -63,6 +63,13 @@ export class UnifiedFinancialEngine {
   private static readonly QUERY_CACHE_TTL = 30 * 1000; // 30 seconds for query results
   private static queryCache = new Map<string, { data: any; timestamp: number }>();
 
+  // Placeholder for storage access, assuming it's initialized elsewhere or will be injected
+  private storage: any; // Replace 'any' with the actual storage type if available
+
+  constructor(storage: any) { // Inject storage dependency
+    this.storage = storage;
+  }
+
   /**
    * Real-time calculation for single representative - CACHED v18.8
    */
@@ -71,7 +78,7 @@ export class UnifiedFinancialEngine {
     const cacheKey = `rep_calc_${representativeId}`;
     const cached = UnifiedFinancialEngine.queryCache.get(cacheKey);
     const now = Date.now();
-    
+
     if (cached && (now - cached.timestamp) < UnifiedFinancialEngine.QUERY_CACHE_TTL) {
       return cached.data;
     }
@@ -288,7 +295,7 @@ export class UnifiedFinancialEngine {
     try {
       // OPTIMIZATION 1: Batch process in smaller chunks to reduce memory usage
       const BATCH_SIZE = Math.min(20, limit);
-      
+
       // OPTIMIZATION 2: Pre-filter with minimal debt threshold
       const highDebtReps = await db.select({
         id: representatives.id,
@@ -308,10 +315,10 @@ export class UnifiedFinancialEngine {
 
       // OPTIMIZATION 3: Process in batches to avoid overwhelming the database
       const allDebtors: UnifiedFinancialData[] = [];
-      
+
       for (let i = 0; i < highDebtReps.length && allDebtors.length < limit; i += BATCH_SIZE) {
         const batch = highDebtReps.slice(i, i + BATCH_SIZE);
-        
+
         const batchPromises = batch.map(async (rep) => {
           try {
             const data = await this.calculateRepresentative(rep.id);
@@ -324,9 +331,9 @@ export class UnifiedFinancialEngine {
 
         const batchResults = await Promise.all(batchPromises);
         const validBatchDebtors = batchResults.filter(rep => rep !== null) as UnifiedFinancialData[];
-        
+
         allDebtors.push(...validBatchDebtors);
-        
+
         // Early termination if we have enough results
         if (allDebtors.length >= limit) {
           break;
@@ -338,35 +345,196 @@ export class UnifiedFinancialEngine {
         .sort((a, b) => b.actualDebt - a.actualDebt)
         .slice(0, limit);
 
-      console.log(`✅ SHERLOCK v18.7: Ultra-optimized generated ${sortedDebtors.length} debtors in ${Date.now() - startTime}ms`);
-      return sortedDebtors;
+      console.log(`✅ SHERLOCK v1.0: Generated ${results.length} debtors in ${Date.now() - startTime}ms`);
+
+    return results;
+  }
+
+  /**
+   * 💰 SHERLOCK v1.0: تحلیل وضعیت مالی کلی سیستم
+   */
+  async generateFinancialSystemHealth(): Promise<{
+    totalDebt: number;
+    totalCredit: number;
+    totalRevenue: number;
+    activeDebtors: number;
+    overdueAmount: number;
+    healthScore: number;
+    recommendations: string[];
+  }> {
+    try {
+      console.log('🏥 SHERLOCK v1.0: Analyzing financial system health...');
+
+      // دریافت آمار کلی
+      const totalStats = await this.storage.query(`
+        SELECT
+          COALESCE(SUM(CAST(total_debt as DECIMAL)), 0) as total_debt,
+          COALESCE(SUM(CAST(credit as DECIMAL)), 0) as total_credit,
+          COALESCE(SUM(CAST(total_sales as DECIMAL)), 0) as total_revenue,
+          COUNT(CASE WHEN CAST(total_debt as DECIMAL) > 0 THEN 1 END) as active_debtors
+        FROM representatives
+        WHERE is_active = true
+      `);
+
+      // محاسبه سررسید گذشته
+      const overdueStats = await this.storage.query(`
+        SELECT COALESCE(SUM(CAST(amount as DECIMAL)), 0) as overdue_amount
+        FROM invoices
+        WHERE status IN ('unpaid', 'overdue')
+        AND due_date < CURRENT_DATE
+      `);
+
+      const stats = totalStats[0];
+      const overdue = overdueStats[0];
+
+      const totalDebt = parseFloat(stats.total_debt || '0');
+      const totalCredit = parseFloat(stats.total_credit || '0');
+      const totalRevenue = parseFloat(stats.total_revenue || '0');
+      const activeDebtors = parseInt(stats.active_debtors || '0');
+      const overdueAmount = parseFloat(overdue.overdue_amount || '0');
+
+      // محاسبه امتیاز سلامت (0-100)
+      let healthScore = 100;
+
+      // کسر امتیاز بر اساس نسبت بدهی به فروش
+      const debtRatio = totalRevenue > 0 ? (totalDebt / totalRevenue) * 100 : 0;
+      if (debtRatio > 50) healthScore -= 30;
+      else if (debtRatio > 30) healthScore -= 20;
+      else if (debtRatio > 15) healthScore -= 10;
+
+      // کسر امتیاز بر اساس سررسید گذشته
+      const overdueRatio = totalDebt > 0 ? (overdueAmount / totalDebt) * 100 : 0;
+      if (overdueRatio > 40) healthScore -= 25;
+      else if (overdueRatio > 25) healthScore -= 15;
+      else if (overdueRatio > 10) healthScore -= 10;
+
+      // کسر امتیاز بر اساس تعداد بدهکاران فعال
+      if (activeDebtors > 50) healthScore -= 15;
+      else if (activeDebtors > 30) healthScore -= 10;
+      else if (activeDebtors > 15) healthScore -= 5;
+
+      healthScore = Math.max(0, Math.min(100, healthScore));
+
+      // تولید توصیه‌ها
+      const recommendations: string[] = [];
+
+      if (debtRatio > 30) {
+        recommendations.push('نسبت بدهی به فروش بالا است - اقدام فوری برای وصول مطالبات');
+      }
+      if (overdueRatio > 25) {
+        recommendations.push('مقدار قابل توجهی از بدهی‌ها سررسید گذشته دارند');
+      }
+      if (activeDebtors > 30) {
+        recommendations.push('تعداد بدهکاران فعال زیاد است - نیاز به برنامه منظم پیگیری');
+      }
+      if (totalCredit > totalDebt * 0.3) {
+        recommendations.push('اعتبار بالا - فرصت برای تشویق خریدهای بیشتر');
+      }
+      if (healthScore > 80) {
+        recommendations.push('وضعیت مالی عالی - ادامه روند فعلی');
+      }
+
+      return {
+        totalDebt,
+        totalCredit,
+        totalRevenue,
+        activeDebtors,
+        overdueAmount,
+        healthScore,
+        recommendations
+      };
 
     } catch (error) {
-      console.error('Error in ultra-optimized getDebtorRepresentatives:', error);
-      return this.getDebtorRepresentativesFallback(limit);
+      console.error('SHERLOCK v1.0: Error analyzing financial health:', error);
+      throw error;
     }
   }
 
   /**
-   * Fallback method for debtor calculation
+   * 📈 SHERLOCK v1.0: تولید گزارش عملکرد مالی ماهانه
    */
-  private async getDebtorRepresentativesFallback(limit: number = 50): Promise<UnifiedFinancialData[]> {
-    console.log('🔄 Using fallback debtor calculation');
-    
-    const highDebtReps = await db.select({
-      id: representatives.id
-    }).from(representatives)
-    .where(sql`CAST(total_debt as DECIMAL) > 100000`) // Only high debt
-    .limit(limit);
+  async generateMonthlyFinancialReport(year: number, month: number): Promise<{
+    month: string;
+    newInvoices: number;
+    totalInvoiceAmount: number;
+    paymentsReceived: number;
+    totalPaymentAmount: number;
+    newDebt: number;
+    debtReduction: number;
+    netChange: number;
+    topDebtors: any[];
+    topPayers: any[];
+  }> {
+    try {
+      console.log(`📈 SHERLOCK v1.0: Generating monthly report for ${year}/${month}`);
 
-    const results = await Promise.all(
-      highDebtReps.map(rep => this.calculateRepresentative(rep.id))
-    );
+      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-    return results
-      .filter(rep => rep.actualDebt > 0)
-      .sort((a, b) => b.actualDebt - a.actualDebt);
+      // فاکتورهای جدید
+      const invoiceStats = await this.storage.query(`
+        SELECT
+          COUNT(*) as count,
+          COALESCE(SUM(CAST(amount as DECIMAL)), 0) as total_amount
+        FROM invoices
+        WHERE created_at >= $1 AND created_at <= $2
+      `, [startDate, endDate]);
+
+      // پرداخت‌های دریافت شده
+      const paymentStats = await this.storage.query(`
+        SELECT
+          COUNT(*) as count,
+          COALESCE(SUM(CAST(amount as DECIMAL)), 0) as total_amount
+        FROM payments
+        WHERE payment_date >= $1 AND payment_date <= $2
+      `, [startDate, endDate]);
+
+      // بهترین پرداخت کنندگان ماه
+      const topPayers = await this.storage.query(`
+        SELECT
+          r.name,
+          r.code,
+          COALESCE(SUM(CAST(p.amount as DECIMAL)), 0) as total_paid
+        FROM payments p
+        JOIN representatives r ON r.id = p.representative_id
+        WHERE p.payment_date >= $1 AND p.payment_date <= $2
+        GROUP BY r.id, r.name, r.code
+        ORDER BY total_paid DESC
+        LIMIT 10
+      `, [startDate, endDate]);
+
+      const invoiceData = invoiceStats[0];
+      const paymentData = paymentStats[0];
+
+      const newInvoices = parseInt(invoiceData.count || '0');
+      const totalInvoiceAmount = parseFloat(invoiceData.total_amount || '0');
+      const paymentsReceived = parseInt(paymentData.count || '0');
+      const totalPaymentAmount = parseFloat(paymentData.total_amount || '0');
+
+      const newDebt = totalInvoiceAmount;
+      const debtReduction = totalPaymentAmount;
+      const netChange = totalPaymentAmount - totalInvoiceAmount;
+
+      return {
+        month: `${year}/${month}`,
+        newInvoices,
+        totalInvoiceAmount,
+        paymentsReceived,
+        totalPaymentAmount,
+        newDebt,
+        debtReduction,
+        netChange,
+        topDebtors: [], // خالی برای الان
+        topPayers: topPayers.map(p => ({
+          name: p.name,
+          code: p.code,
+          amount: parseFloat(p.total_paid)
+        }))
+      };
+
+    } catch (error) {
+      console.error('SHERLOCK v1.0: Error generating monthly report:', error);
+      throw error;
+    }
   }
 }
-
-export const unifiedFinancialEngine = new UnifiedFinancialEngine();

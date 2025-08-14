@@ -56,7 +56,7 @@ export default function DebtorRepresentativesCard() {
   const { data: debtorData, isLoading, error } = useQuery<DebtorRepresentative[]>({
     queryKey: ["debtor-representatives"],
     queryFn: async () => {
-      console.log('SHERLOCK v18.4: Fetching URL:', '/api/unified-financial/debtors');
+      console.log('SHERLOCK v1.0: Fetching URL:', '/api/unified-financial/debtors');
 
       try {
         const response = await fetch('/api/unified-financial/debtors?limit=30', {
@@ -74,7 +74,7 @@ export default function DebtorRepresentativesCard() {
         const result = await response.json();
 
         if (result.success && Array.isArray(result.data)) {
-          console.log(`✅ Loaded ${result.data.length} debtor representatives`);
+          console.log(`SHERLOCK v1.0: Loaded ${result.data.length} debtor representatives`);
           return result.data;
         } else {
           console.log('Fallback to legacy endpoint');
@@ -94,9 +94,11 @@ export default function DebtorRepresentativesCard() {
         return [];
       }
     },
-    staleTime: 60000, // 1 minute cache
-    refetchInterval: 300000, // 5 minutes auto-refresh
+    staleTime: 180000, // 3 minutes - shorter for real-time feel
+    gcTime: 600000, // Keep in memory for 10 minutes
+    refetchOnWindowFocus: false, // Prevent excessive refetching
     retry: 2,
+    refetchInterval: 300000, // 5 minutes auto-refresh
     retryDelay: 1000
   });
 
