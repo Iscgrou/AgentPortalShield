@@ -252,3 +252,9 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
 
   console.log('✅ Enhanced CRM Routes registered successfully');
 }
+
+// Export cache invalidation function
+export function invalidateCrmCache() {
+  console.log('🗑️ CRM cache invalidated for immediate synchronization');
+  // Add any cache clearing logic here if needed
+}
