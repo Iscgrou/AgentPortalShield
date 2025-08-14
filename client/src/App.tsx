@@ -1,138 +1,254 @@
-
-import { Router, Route } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Switch, Route, useLocation } from "wouter";
+import { useState, useEffect, lazy, Suspense } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { useLocation } from "wouter";
-import { useEffect } from "react";
-
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
+import { CrmAuthProvider, useCrmAuth } from "./hooks/use-crm-auth";
+
+// Layout components
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 
 // Pages
-import UnifiedAuth from "@/pages/unified-auth";
 import Dashboard from "@/pages/dashboard";
-import Representatives from "@/pages/representatives";
 import Invoices from "@/pages/invoices";
+import InvoiceManagement from "@/pages/InvoiceManagement";
+import Representatives from "@/pages/representatives";
 import SalesPartners from "@/pages/sales-partners";
-import FinancialIntegrity from "@/pages/financial-integrity";
+
+
 import Settings from "@/pages/settings";
+import Portal from "@/pages/portal";
+import AdminLogin from "@/pages/admin-login";
 import NotFound from "@/pages/not-found";
+import UnifiedAuth from "@/pages/unified-auth";
+import FinancialIntegrityPage from "@/pages/financial-integrity";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 2,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+// Lazy load Modern CRM Dashboard with preloading optimization
+const ModernCrmDashboard = lazy(() => 
+  import('./components/crm/modern-crm-dashboard').then(module => {
+    // Preload critical components
+    import('./components/crm/workspace/WorkspaceHub');
+    return module;
+  })
+);
 
-function ProtectedRoute({ path, component: Component, requiredRole }: { 
-  path: string; 
-  component: React.ComponentType; 
-  requiredRole?: 'ADMIN' | 'CRM';
-}) {
-  const { user, isAuthenticated, isLoading } = useAuth();
-  const [location, setLocation] = useLocation();
+// CRM Protected Routes Component
+function CrmProtectedRoutes() {
+  const { user, isLoading } = useCrmAuth();
+  const [, setLocation] = useLocation();
 
+  // FORCE LOGIN EVERY TIME - No auto-authentication
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      console.log(`Authentication required for ${path}, redirecting to login`);
-      setLocation('/');
-      return;
+    if (!isLoading && !user) {
+      console.log('CRM Authentication required, redirecting to login...');
+      setLocation('/'); // Always redirect to login page
+    } else if (user) {
+      console.log('CRM User authenticated:', user);
     }
+  }, [user, isLoading, setLocation]);
 
-    if (!isLoading && isAuthenticated && user && requiredRole) {
-      if (user.role !== requiredRole) {
-        console.log(`Access denied: user role ${user.role} !== required ${requiredRole}`);
-        setLocation('/');
-        return;
-      }
-    }
-  }, [isAuthenticated, isLoading, user, path, requiredRole, setLocation]);
-
+  // Show loading while checking authentication
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">در حال بررسی دسترسی...</p>
+          <p className="text-gray-600 dark:text-gray-400">در حال بررسی احراز هویت CRM...</p>
         </div>
       </div>
     );
   }
 
-  if (!isAuthenticated || !user) {
+  // Return null while redirecting
+  if (!user) {
     return null;
   }
 
-  if (requiredRole && user.role !== requiredRole) {
-    return null;
-  }
-
-  return <Component />;
+  // 🔥 NEW: Render Modern CRM Dashboard (Unified Interface)
+  return (
+    <Switch>
+      <Route path="/crm">
+        {() => (
+          <Suspense fallback={
+            <div className="min-h-screen clay-background relative flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+                <p className="text-white text-lg">بارگذاری پنل CRM مدرن...</p>
+                <p className="text-blue-200 text-sm mt-2">معماری یکپارچه جدید</p>
+              </div>
+            </div>
+          }>
+            <ModernCrmDashboard />
+          </Suspense>
+        )}
+      </Route>
+    </Switch>
+  );
 }
 
-function AppRoutes() {
+function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
   return (
-    <>
-      <Route path="/" component={UnifiedAuth} />
-      
-      {/* Admin Routes */}
-      <Route path="/admin">
-        <ProtectedRoute path="/admin" component={Dashboard} requiredRole="ADMIN" />
-      </Route>
-      <Route path="/admin/">
-        <ProtectedRoute path="/admin/" component={Dashboard} requiredRole="ADMIN" />
-      </Route>
-      <Route path="/admin/representatives">
-        <ProtectedRoute path="/admin/representatives" component={Representatives} requiredRole="ADMIN" />
-      </Route>
-      <Route path="/admin/invoices">
-        <ProtectedRoute path="/admin/invoices" component={Invoices} requiredRole="ADMIN" />
-      </Route>
-      <Route path="/admin/sales-partners">
-        <ProtectedRoute path="/admin/sales-partners" component={SalesPartners} requiredRole="ADMIN" />
-      </Route>
-      <Route path="/admin/financial-integrity">
-        <ProtectedRoute path="/admin/financial-integrity" component={FinancialIntegrity} requiredRole="ADMIN" />
-      </Route>
-      <Route path="/admin/settings">
-        <ProtectedRoute path="/admin/settings" component={Settings} requiredRole="ADMIN" />
-      </Route>
+    <div className="admin-panel-background dark">
+      <Sidebar isOpen={isSidebarOpen} onToggle={toggleSidebar} />
+      <div className="main-content lg:mr-80 mr-0 relative z-10">
+        <Header onMenuClick={toggleSidebar} />
+        <main className="p-4 lg:p-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
 
-      {/* CRM Routes */}
-      <Route path="/crm">
-        <ProtectedRoute path="/crm" component={Dashboard} requiredRole="CRM" />
-      </Route>
-      <Route path="/crm/">
-        <ProtectedRoute path="/crm/" component={Dashboard} requiredRole="CRM" />
-      </Route>
-      <Route path="/crm/representatives">
-        <ProtectedRoute path="/crm/representatives" component={Representatives} requiredRole="CRM" />
-      </Route>
-      <Route path="/crm/invoices">
-        <ProtectedRoute path="/crm/invoices" component={Invoices} requiredRole="CRM" />
-      </Route>
-      <Route path="/crm/settings">
-        <ProtectedRoute path="/crm/settings" component={Settings} requiredRole="CRM" />
-      </Route>
+function AuthenticatedRouter() {
+  // Check authentication status
+  const { data: authStatus, isLoading: authLoading, error: authError } = useQuery({
+    queryKey: ['auth-status'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/auth/check', { credentials: 'include' });
+        console.log('Auth check response status:', response.status);
 
-      {/* Catch all */}
-      <Route path="/:rest*" component={NotFound} />
-    </>
+        if (!response.ok) {
+          console.error('Auth check failed:', response.status);
+          return { authenticated: false };
+        }
+
+        const data = await response.json();
+        console.log('Auth status:', data);
+        return data;
+      } catch (error) {
+        console.error('Auth check error:', error);
+        return { authenticated: false };
+      }
+    },
+    retry: 1,
+    retryDelay: 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const isAuthenticated = authStatus?.authenticated === true;
+
+  // Log authentication status for debugging
+  console.log('Authentication Status:', {
+    isAuthenticated,
+    authLoading,
+    authError,
+    authStatus
+  });
+
+  const { isAuthenticated: adminAuthenticated, isLoading: adminIsLoading } = useAuth();
+  const [location] = useLocation();
+
+  // Check if this is a public portal route
+  const isPublicPortal = location.startsWith('/portal/') || location.startsWith('/representative/');
+  const isCrmRoute = location.startsWith('/crm');
+
+  if (isPublicPortal) {
+    // 🔒 SECURITY: Completely isolated public portal - no admin access
+    return (
+      <div className="dark public-portal-isolated">
+        <Switch>
+          <Route path="/portal/:publicId" component={Portal} />
+          <Route path="/representative/:publicId" component={Portal} />
+          <Route path="/portal/*">
+            {() => (
+              <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-red-400 text-6xl mb-4">⚠</div>
+                  <h1 className="text-2xl font-bold mb-2">پورتال یافت نشد</h1>
+                  <p className="text-gray-400">
+                    لینک پورتال نامعتبر است. لطفاً لینک صحیح را از مدیر سیستم دریافت کنید.
+                  </p>
+                </div>
+              </div>
+            )}
+          </Route>
+          <Route path="/representative/*">
+            {() => (
+              <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-red-400 text-6xl mb-4">⚠</div>
+                  <h1 className="text-2xl font-bold mb-2">پورتال یافت نشد</h1>
+                  <p className="text-gray-400">
+                    لینک پورتال نامعتبر است. لطفاً لینک صحیح را از مدیر سیستم دریافت کنید.
+                  </p>
+                </div>
+              </div>
+            )}
+          </Route>
+        </Switch>
+      </div>
+    );
+  }
+
+  // SHERLOCK v3.0 FIX: Always require login for CRM routes
+  if (isCrmRoute) {
+    return (
+      <CrmAuthProvider>
+        <CrmProtectedRoutes />
+      </CrmAuthProvider>
+    );
+  }
+
+  // Show loading state while checking authentication
+  if (authLoading || adminIsLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">در حال بارگذاری...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // SHERLOCK v3.0 FIX: Always show unified auth for non-authenticated users
+  if (!isAuthenticated || !adminAuthenticated) {
+    return (
+      <CrmAuthProvider>
+        <UnifiedAuth />
+      </CrmAuthProvider>
+    );
+  }
+
+  // Show admin panel if authenticated
+  return (
+    <AdminLayout>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/dashboard" component={Dashboard} />
+        <Route path="/representatives" component={Representatives} />
+        <Route path="/invoices" component={Invoices} />
+        <Route path="/invoice-management" component={InvoiceManagement} />
+        <Route path="/sales-partners" component={SalesPartners} />
+        <Route path="/financial-integrity" component={FinancialIntegrityPage} />
+        <Route path="/settings" component={Settings} />
+        <Route component={NotFound} />
+      </Switch>
+    </AdminLayout>
   );
 }
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router>
-          <AppRoutes />
-          <Toaster />
-        </Router>
-      </AuthProvider>
+      <TooltipProvider>
+        <AuthProvider>
+          <div className="rtl">
+            <Toaster />
+            <AuthenticatedRouter />
+          </div>
+        </AuthProvider>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
