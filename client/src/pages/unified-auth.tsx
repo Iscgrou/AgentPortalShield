@@ -29,8 +29,22 @@ export default function UnifiedAuth() {
   // Admin auth
   const { loginMutation: adminLoginMutation, isAuthenticated: isAdminAuth } = useAuth();
   
-  // CRM auth
-  const { loginMutation: crmLoginMutation, isAuthenticated: isCrmAuth } = useCrmAuth();
+  // CRM auth - handle safely in case provider is not available
+  let crmLoginMutation, isCrmAuth;
+  try {
+    const crmAuth = useCrmAuth();
+    crmLoginMutation = crmAuth.loginMutation;
+    isCrmAuth = crmAuth.user !== null;
+  } catch (error) {
+    // CRM auth context not available, create fallback
+    crmLoginMutation = {
+      mutate: () => {},
+      isPending: false,
+      isError: false,
+      error: null
+    };
+    isCrmAuth = false;
+  }
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
