@@ -279,16 +279,16 @@ router.get('/verify-total-debt', requireAuth, async (req, res) => {
     res.json({
       success: true,
       verification: {
-        expectedAmount: 173146990, // The amount shown in widget
+        expectedAmount: 183146990, // Updated expected amount from dashboard widget
         calculations: {
           fromRepresentativesTable: verificationResult.representativesTableSum,
           fromUnifiedEngine: verificationResult.unifiedEngineSum,
           fromDirectSQL: verificationResult.directSqlSum
         },
         accuracy: {
-          tableVsExpected: verificationResult.representativesTableSum === 173146990,
-          engineVsExpected: verificationResult.unifiedEngineSum === 173146990,
-          sqlVsExpected: verificationResult.directSqlSum === 173146990,
+          tableVsExpected: verificationResult.representativesTableSum === 183146990,
+          engineVsExpected: verificationResult.unifiedEngineSum === 183146990,
+          sqlVsExpected: verificationResult.directSqlSum === 183146990,
           allMethodsConsistent: verificationResult.isConsistent
         },
         statistics: {
@@ -306,6 +306,104 @@ router.get('/verify-total-debt', requireAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: "خطا در تایید مجموع بدهی"
+    });
+  }
+});
+
+/**
+ * ✅ SHERLOCK v23.0: محاسبه فوری و مستقیم جمع بدهی نمایندگان
+ * GET /api/unified-financial/calculate-immediate-debt-sum
+ */
+router.get('/calculate-immediate-debt-sum', requireAuth, async (req, res) => {
+  try {
+    console.log("🔍 SHERLOCK v23.0: Starting immediate debt calculation...");
+    
+    // Method 1: Direct sum from representatives table (current displayed values)
+    const allActiveReps = await db.select({
+      id: representatives.id,
+      name: representatives.name,
+      code: representatives.code,
+      totalDebt: representatives.totalDebt,
+      isActive: representatives.isActive
+    }).from(representatives).where(eq(representatives.isActive, true));
+
+    let manualTableSum = 0;
+    let debtorsCount = 0;
+    const topDebtors = [];
+    
+    for (const rep of allActiveReps) {
+      const debt = parseFloat(rep.totalDebt) || 0;
+      manualTableSum += debt;
+      if (debt > 0) {
+        debtorsCount++;
+        topDebtors.push({
+          id: rep.id,
+          name: rep.name,
+          code: rep.code,
+          debt: debt
+        });
+      }
+    }
+
+    // Sort by debt amount
+    topDebtors.sort((a, b) => b.debt - a.debt);
+
+    // Method 2: Real-time calculation using unified engine
+    const globalSummary = await unifiedFinancialEngine.calculateGlobalSummary();
+    
+    // Method 3: Direct database calculation
+    const [totalInvoices] = await db.select({
+      total: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`
+    }).from(invoices);
+
+    const [totalAllocatedPayments] = await db.select({
+      total: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = true THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`
+    }).from(payments);
+
+    const directDbCalculation = Math.max(0, totalInvoices.total - totalAllocatedPayments.total);
+
+    // Expected amount from dashboard
+    const expectedAmount = 183146990;
+    
+    console.log(`📊 IMMEDIATE DEBT CALCULATION RESULTS:`);
+    console.log(`💰 Manual Table Sum: ${Math.round(manualTableSum).toLocaleString()} تومان`);
+    console.log(`🎯 Unified Engine: ${Math.round(globalSummary.totalSystemDebt).toLocaleString()} تومان`);
+    console.log(`📝 Direct DB Calc: ${Math.round(directDbCalculation).toLocaleString()} تومان`);
+    console.log(`🎯 Expected (Dashboard): ${expectedAmount.toLocaleString()} تومان`);
+    console.log(`✅ Table matches Expected: ${Math.round(manualTableSum) === expectedAmount ? 'YES' : 'NO'}`);
+    console.log(`👥 Total Active Reps: ${allActiveReps.length}`);
+    console.log(`💸 Reps with Debt: ${debtorsCount}`);
+
+    res.json({
+      success: true,
+      calculation: {
+        manualTableSum: Math.round(manualTableSum),
+        unifiedEngineSum: Math.round(globalSummary.totalSystemDebt),
+        directDbCalculation: Math.round(directDbCalculation),
+        expectedDashboardAmount: expectedAmount,
+        isAccurate: Math.round(manualTableSum) === expectedAmount,
+        difference: Math.abs(Math.round(manualTableSum) - expectedAmount)
+      },
+      statistics: {
+        totalActiveRepresentatives: allActiveReps.length,
+        representativesWithDebt: debtorsCount,
+        representativesWithoutDebt: allActiveReps.length - debtorsCount
+      },
+      topDebtors: topDebtors.slice(0, 10),
+      verification: {
+        allMethodsConsistent: Math.abs(Math.round(manualTableSum) - Math.round(globalSummary.totalSystemDebt)) < 1000,
+        tableVsExpected: Math.round(manualTableSum) === expectedAmount,
+        engineVsExpected: Math.round(globalSummary.totalSystemDebt) === expectedAmount,
+        dbVsExpected: Math.round(directDbCalculation) === expectedAmount
+      },
+      calculatedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error in immediate debt calculation:', error);
+    res.status(500).json({
+      success: false,
+      error: "خطا در محاسبه فوری مجموع بدهی"
     });
   }
 });
