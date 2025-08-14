@@ -50,7 +50,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { SalesPartnerWithCount } from "@shared/schema";
 
 // Extend the shared type with additional fields needed for UI
