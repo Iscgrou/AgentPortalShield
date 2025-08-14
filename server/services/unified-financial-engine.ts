@@ -260,15 +260,74 @@ export class UnifiedFinancialEngine {
   }
 
   /**
-   * Real-time debtor list
+   * Real-time debtor list - OPTIMIZED
    */
   async getDebtorRepresentatives(limit: number = 50): Promise<UnifiedFinancialData[]> {
-    const allData = await this.calculateAllRepresentatives();
+    console.log(`🚀 SHERLOCK v18.6: Getting top ${limit} debtors with optimization`);
+    const startTime = Date.now();
 
-    return allData
+    try {
+      // Step 1: Get representatives with high debt first (pre-filtering)
+      const highDebtReps = await db.select({
+        id: representatives.id,
+        name: representatives.name,
+        code: representatives.code,
+        totalDebt: representatives.totalDebt
+      }).from(representatives)
+      .where(sql`CAST(total_debt as DECIMAL) > 0`)
+      .orderBy(desc(sql`CAST(total_debt as DECIMAL)`))
+      .limit(limit * 2); // Get 2x limit for buffer
+
+      console.log(`⚡ Found ${highDebtReps.length} potential debtors in ${Date.now() - startTime}ms`);
+
+      // Step 2: Calculate exact debt for only these representatives
+      const debtorPromises = highDebtReps.map(async (rep) => {
+        try {
+          const data = await this.calculateRepresentative(rep.id);
+          return data.actualDebt > 0 ? data : null;
+        } catch (error) {
+          console.warn(`Failed to calculate debt for rep ${rep.id}:`, error);
+          return null;
+        }
+      });
+
+      const results = await Promise.all(debtorPromises);
+      const validDebtors = results.filter(rep => rep !== null) as UnifiedFinancialData[];
+
+      // Step 3: Sort and limit
+      const sortedDebtors = validDebtors
+        .sort((a, b) => b.actualDebt - a.actualDebt)
+        .slice(0, limit);
+
+      console.log(`✅ SHERLOCK v18.6: Generated ${sortedDebtors.length} debtors in ${Date.now() - startTime}ms`);
+      return sortedDebtors;
+
+    } catch (error) {
+      console.error('Error in optimized getDebtorRepresentatives:', error);
+      // Fallback to simple method
+      return this.getDebtorRepresentativesFallback(limit);
+    }
+  }
+
+  /**
+   * Fallback method for debtor calculation
+   */
+  private async getDebtorRepresentativesFallback(limit: number = 50): Promise<UnifiedFinancialData[]> {
+    console.log('🔄 Using fallback debtor calculation');
+    
+    const highDebtReps = await db.select({
+      id: representatives.id
+    }).from(representatives)
+    .where(sql`CAST(total_debt as DECIMAL) > 100000`) // Only high debt
+    .limit(limit);
+
+    const results = await Promise.all(
+      highDebtReps.map(rep => this.calculateRepresentative(rep.id))
+    );
+
+    return results
       .filter(rep => rep.actualDebt > 0)
-      .sort((a, b) => b.actualDebt - a.actualDebt)
-      .slice(0, limit);
+      .sort((a, b) => b.actualDebt - a.actualDebt);
   }
 }
 

@@ -6,6 +6,7 @@ import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
 
 interface DebtorRepresentative {
   id: number;
+  representativeId?: number; // Added for potential use in key generation
   name: string;
   code: string;
   remainingDebt: string;
@@ -58,33 +59,45 @@ export default function DebtorRepresentativesCard() {
       console.log('SHERLOCK v18.4: Fetching URL:', '/api/unified-financial/debtors');
 
       try {
-        const response = await fetch('/api/unified-financial/debtors', {
-          credentials: 'include'
+        const response = await fetch('/api/unified-financial/debtors?limit=30', {
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
         });
 
-        if (response.ok) {
-          const result = await response.json();
-          return result.data || [];
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        // Fallback to legacy endpoint if unified endpoint fails
-        console.log('Fallback to legacy endpoint');
-        const fallbackResponse = await fetch('/api/dashboard/debtor-representatives', {
-          credentials: 'include'
-        });
+        const result = await response.json();
 
-        if (!fallbackResponse.ok) {
-          throw new Error('Both endpoints failed');
+        if (result.success && Array.isArray(result.data)) {
+          console.log(`✅ Loaded ${result.data.length} debtor representatives`);
+          return result.data;
+        } else {
+          console.log('Fallback to legacy endpoint');
+          const legacyResponse = await fetch('/api/dashboard/debtor-representatives', {
+            credentials: 'include'
+          });
+
+          if (legacyResponse.ok) {
+            const legacyData = await legacyResponse.json();
+            return Array.isArray(legacyData) ? legacyData : [];
+          }
+
+          return [];
         }
-
-        return await fallbackResponse.json();
-      } catch (err) {
-        console.error('Error fetching debtor representatives:', err);
-        throw err;
+      } catch (error) {
+        console.error('Error fetching debtor representatives:', error);
+        return [];
       }
     },
+    staleTime: 60000, // 1 minute cache
+    refetchInterval: 300000, // 5 minutes auto-refresh
     retry: 2,
-    staleTime: 30000
+    retryDelay: 1000
   });
 
   if (isLoading) {
@@ -179,7 +192,7 @@ export default function DebtorRepresentativesCard() {
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {debtorData.slice(0, 10).map((debtor: any, index: number) => (
               <DebtorRepresentativeRow
-                key={`debtor-${debtor.id || debtor.code || index}-${debtor.name?.replace(/\s+/g, '-') || 'unknown'}`}
+                key={`debtor-${debtor.representativeId || debtor.id}-${Date.now()}`}
                 representative={debtor}
               />
             ))}
