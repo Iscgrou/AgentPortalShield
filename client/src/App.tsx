@@ -1,3 +1,4 @@
+
 import { Router, Route } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -28,16 +29,16 @@ const queryClient = new QueryClient({
 
 function AdminProtectedRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const redirected = useRef(false);
 
   const handleAuthRedirect = useCallback(() => {
-    if (!isLoading && !isAuthenticated && !redirected.current) {
+    if (!isLoading && !isAuthenticated && !redirected.current && location.startsWith('/admin')) {
       console.log('Admin Authentication required, redirecting to login...');
       redirected.current = true;
       setTimeout(() => setLocation('/'), 100);
     }
-  }, [isAuthenticated, isLoading, setLocation]);
+  }, [isAuthenticated, isLoading, setLocation, location]);
 
   useEffect(() => {
     handleAuthRedirect();
@@ -74,16 +75,16 @@ function AdminProtectedRoutes() {
 
 function CrmProtectedRoutes() {
   const { user, isLoading } = useCrmAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const redirected = useRef(false);
 
   const handleAuthRedirect = useCallback(() => {
-    if (!isLoading && !user && !redirected.current) {
+    if (!isLoading && !user && !redirected.current && location.startsWith('/crm')) {
       console.log('CRM Authentication required, redirecting to login...');
       redirected.current = true;
       setTimeout(() => setLocation('/'), 100);
     }
-  }, [user, isLoading, setLocation]);
+  }, [user, isLoading, setLocation, location]);
 
   useEffect(() => {
     handleAuthRedirect();
@@ -122,12 +123,10 @@ function App() {
       <Router>
         <AuthProvider>
           <CrmAuthProvider>
-            <>
-              <Route path="/" component={UnifiedAuth} />
-              <Route path="/admin/:rest*" component={AdminProtectedRoutes} />
-              <Route path="/crm/:rest*" component={CrmProtectedRoutes} />
-              <Route path="/:rest*" component={NotFound} />
-            </>
+            <Route path="/" component={UnifiedAuth} />
+            <AdminProtectedRoutes />
+            <CrmProtectedRoutes />
+            <Route path="/:rest*" component={NotFound} />
             <Toaster />
           </CrmAuthProvider>
         </AuthProvider>

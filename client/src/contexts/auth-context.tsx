@@ -19,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const checkingAuth = useRef(false);
+  const mounted = useRef(true);
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
@@ -27,19 +28,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return response;
     },
     onSuccess: (data) => {
+      if (!mounted.current) return;
+      
       console.log('✅ Admin Login Success');
       setIsAuthenticated(true);
       setAuthChecked(true);
     },
     onError: (error: any) => {
+      if (!mounted.current) return;
+      
       console.error('❌ Admin Login Error:', error);
       setIsAuthenticated(false);
     }
   });
 
   const checkAuth = useCallback(async () => {
-    if (authChecked || checkingAuth.current) {
-      console.log('🔒 Admin Auth: Skipping duplicate check');
+    if (authChecked || checkingAuth.current || !mounted.current) {
       return;
     }
     
@@ -52,21 +56,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "GET"
       });
       
+      if (!mounted.current) return;
+      
       const isValid = response.ok;
       setIsAuthenticated(isValid);
       
       console.log(isValid ? '✅ Admin Auth Valid' : '❌ Admin Auth Invalid');
     } catch (error) {
+      if (!mounted.current) return;
+      
       console.log('❌ Admin Auth Check Failed');
       setIsAuthenticated(false);
     } finally {
-      setIsLoading(false);
-      setAuthChecked(true);
+      if (mounted.current) {
+        setIsLoading(false);
+        setAuthChecked(true);
+      }
       checkingAuth.current = false;
     }
-  }, []);
+  }, [authChecked]);
 
   const login = useCallback(() => {
+    if (!mounted.current) return;
     setIsAuthenticated(true);
     setAuthChecked(true);
   }, []);
@@ -77,17 +88,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.log('❌ Logout request failed');
     } finally {
-      setIsAuthenticated(false);
-      setAuthChecked(false);
+      if (mounted.current) {
+        setIsAuthenticated(false);
+        setAuthChecked(false);
+      }
     }
   }, []);
 
   // Single auth check on mount only
   useEffect(() => {
+    mounted.current = true;
+    
     if (!authChecked && !checkingAuth.current) {
       console.log('🔍 Admin Auth: Initial check');
       checkAuth();
     }
+
+    return () => {
+      mounted.current = false;
+    };
   }, []); // Empty dependency array to run only once on mount
 
   return (

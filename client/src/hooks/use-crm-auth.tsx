@@ -29,10 +29,10 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const checkingAuth = useRef(false);
+  const mounted = useRef(true);
 
   const checkAuth = useCallback(async () => {
-    if (authChecked || checkingAuth.current) {
-      console.log('🔒 CRM Auth: Skipping duplicate check');
+    if (authChecked || checkingAuth.current || !mounted.current) {
       return;
     }
 
@@ -42,8 +42,10 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       const response = await apiRequest('/api/crm/auth/user');
 
-      if (response && (response.id || response.user)) {
-        const userData = response.user || response;
+      if (!mounted.current) return;
+
+      if (response && response.success && (response.user?.id || response.user?.username)) {
+        const userData = response.user;
         setUser(userData);
         setIsAuthenticated(true);
         console.log('✅ CRM Auth Success:', userData.username);
@@ -53,15 +55,19 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
         console.log('❌ CRM Auth Failed: No user data');
       }
     } catch (error: any) {
+      if (!mounted.current) return;
+      
       console.log('❌ CRM Auth Failed:', error.message);
       setUser(null);
       setIsAuthenticated(false);
     } finally {
-      setIsLoading(false);
-      setAuthChecked(true);
+      if (mounted.current) {
+        setIsLoading(false);
+        setAuthChecked(true);
+      }
       checkingAuth.current = false;
     }
-  }, []);
+  }, [authChecked]);
 
   // Login mutation
   const loginMutation = useMutation({
@@ -74,6 +80,8 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       return response;
     },
     onSuccess: (data) => {
+      if (!mounted.current) return;
+      
       console.log('✅ CRM Login Success:', data);
       if (data.user) {
         setUser(data.user);
@@ -82,6 +90,8 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       }
     },
     onError: (error: any) => {
+      if (!mounted.current) return;
+      
       console.error('❌ CRM Login Error:', error);
       setUser(null);
       setIsAuthenticated(false);
@@ -94,6 +104,8 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
       await apiRequest('/api/crm/auth/logout', { method: 'POST' });
     },
     onSuccess: () => {
+      if (!mounted.current) return;
+      
       console.log('✅ CRM Logout Success');
       setUser(null);
       setIsAuthenticated(false);
@@ -103,10 +115,16 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
 
   // Single auth check on mount only
   useEffect(() => {
+    mounted.current = true;
+    
     if (!authChecked && !checkingAuth.current) {
       console.log('🔍 CRM Auth: Initial check');
       checkAuth();
     }
+
+    return () => {
+      mounted.current = false;
+    };
   }, []); // Empty dependency array to run only once on mount
 
   return (

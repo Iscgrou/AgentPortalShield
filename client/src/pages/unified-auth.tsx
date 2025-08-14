@@ -10,43 +10,57 @@ import { useAuth } from "@/contexts/auth-context";
 import { useCrmAuth } from "@/hooks/use-crm-auth";
 
 export default function UnifiedAuth() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState("admin");
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const redirected = useRef(false);
+  const mounted = useRef(true);
 
   const { isAuthenticated: adminAuth, isLoading: adminLoading, loginMutation: adminLogin } = useAuth();
   const { isAuthenticated: crmAuth, isLoading: crmLoading, loginMutation: crmLogin } = useCrmAuth();
 
   const handleAuthRedirect = useCallback(() => {
-    if (redirected.current) return;
+    if (redirected.current || !mounted.current) return;
 
     // Only redirect when authentication is confirmed and loading is complete
     if (!adminLoading && !crmLoading) {
-      if (adminAuth) {
+      if (adminAuth && location === '/') {
         console.log('✅ Admin authenticated, redirecting...');
         redirected.current = true;
-        setTimeout(() => setLocation("/admin"), 100);
+        setTimeout(() => {
+          if (mounted.current) {
+            setLocation("/admin");
+          }
+        }, 100);
         return;
       }
 
-      if (crmAuth) {
+      if (crmAuth && location === '/') {
         console.log('✅ CRM authenticated, redirecting...');
         redirected.current = true;
-        setTimeout(() => setLocation("/crm"), 100);
+        setTimeout(() => {
+          if (mounted.current) {
+            setLocation("/crm");
+          }
+        }, 100);
         return;
       }
     }
-  }, [adminAuth, crmAuth, adminLoading, crmLoading, setLocation]);
+  }, [adminAuth, crmAuth, adminLoading, crmLoading, setLocation, location]);
 
   useEffect(() => {
+    mounted.current = true;
     handleAuthRedirect();
+    
+    return () => {
+      mounted.current = false;
+    };
   }, [handleAuthRedirect]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!credentials.username || !credentials.password) return;
+    if (!credentials.username || !credentials.password || !mounted.current) return;
 
     try {
       if (activeTab === "admin") {
@@ -65,7 +79,7 @@ export default function UnifiedAuth() {
   const error = adminLogin.error || crmLogin.error;
 
   // Don't render if already authenticated and redirecting
-  if ((adminAuth || crmAuth) && !isLoading) {
+  if (((adminAuth || crmAuth) && !isLoading) || location !== '/') {
     return null;
   }
 
