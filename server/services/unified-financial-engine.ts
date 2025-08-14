@@ -57,11 +57,15 @@ export interface GlobalFinancialSummary {
 }
 
 export class UnifiedFinancialEngine {
-  // Enhanced multi-level cache system
+  // Enhanced multi-level cache system with immediate invalidation
   private static cache = new Map<string, { data: any; timestamp: number }>();
-  private static readonly CACHE_TTL = 2 * 60 * 1000; // 2 minutes
-  private static readonly QUERY_CACHE_TTL = 30 * 1000; // 30 seconds for query results
+  private static readonly CACHE_TTL = 30 * 1000; // Reduced to 30 seconds for faster updates
+  private static readonly QUERY_CACHE_TTL = 10 * 1000; // Reduced to 10 seconds for real-time feel
   private static queryCache = new Map<string, { data: any; timestamp: number }>();
+  
+  // Real-time cache invalidation tracking
+  private static invalidationQueue = new Set<string>();
+  private static lastInvalidation = new Map<string, number>();
 
   // Placeholder for storage access, assuming it's initialized elsewhere or will be injected
   private storage: any; // Replace 'any' with the actual storage type if available
@@ -71,17 +75,56 @@ export class UnifiedFinancialEngine {
   }
 
   /**
+   * ✅ SHERLOCK v24.0: Force immediate cache invalidation for real-time updates
+   */
+  static forceInvalidateRepresentative(representativeId: number): void {
+    const cacheKeys = [
+      `rep_calc_${representativeId}`,
+      `debtor_list`,
+      `global_summary`,
+      `all_representatives`
+    ];
+    
+    cacheKeys.forEach(key => {
+      this.queryCache.delete(key);
+      this.cache.delete(key);
+      this.invalidationQueue.add(key);
+      this.lastInvalidation.set(key, Date.now());
+    });
+    
+    console.log(`🔄 SHERLOCK v24.0: Force invalidated cache for representative ${representativeId}`);
+  }
+
+  /**
+   * ✅ Enhanced cache check with invalidation awareness
+   */
+  private static isCacheValid(cacheKey: string, timestamp: number, ttl: number): boolean {
+    const now = Date.now();
+    const lastInval = this.lastInvalidation.get(cacheKey) || 0;
+    
+    // If cache was force-invalidated after this entry, it's invalid
+    if (lastInval > timestamp) {
+      return false;
+    }
+    
+    return (now - timestamp) < ttl;
+  }
+
+  /**
    * ✅ SHERLOCK v23.0: محاسبه صحیح مالی نماینده طبق تعاریف استاندارد
    */
   async calculateRepresentative(representativeId: number): Promise<UnifiedFinancialData> {
-    // Check cache first
+    // Check cache first with enhanced invalidation check
     const cacheKey = `rep_calc_${representativeId}`;
     const cached = UnifiedFinancialEngine.queryCache.get(cacheKey);
     const now = Date.now();
 
-    if (cached && (now - cached.timestamp) < UnifiedFinancialEngine.QUERY_CACHE_TTL) {
+    if (cached && UnifiedFinancialEngine.isCacheValid(cacheKey, cached.timestamp, UnifiedFinancialEngine.QUERY_CACHE_TTL)) {
       return cached.data;
     }
+
+    // Clear from invalidation queue if present
+    UnifiedFinancialEngine.invalidationQueue.delete(cacheKey);
 
     // Get representative data
     const rep = await db.select({
@@ -254,15 +297,14 @@ export class UnifiedFinancialEngine {
   }
 
   /**
-   * ✅ SHERLOCK v23.0: بروزرسانی بدهی نماینده در جدول representatives
+   * ✅ SHERLOCK v24.0: بروزرسانی بدهی نماینده با force invalidation
    */
   async syncRepresentativeDebt(representativeId: number): Promise<void> {
     try {
+      // Force invalidate all related caches BEFORE calculation
+      UnifiedFinancialEngine.forceInvalidateRepresentative(representativeId);
+      
       const financialData = await this.calculateRepresentative(representativeId);
-
-      // پاک کردن cache برای refresh فوری
-      const cacheKey = `rep_calc_${representativeId}`;
-      UnifiedFinancialEngine.queryCache.delete(cacheKey);
 
       // بروزرسانی جدول representatives با بدهی صحیح
       await db.update(representatives)
@@ -273,7 +315,10 @@ export class UnifiedFinancialEngine {
         })
         .where(eq(representatives.id, representativeId));
 
-      console.log(`✅ Synced representative ${representativeId} debt: ${financialData.actualDebt}`);
+      // Force invalidate again AFTER update to ensure immediate UI refresh
+      UnifiedFinancialEngine.forceInvalidateRepresentative(representativeId);
+
+      console.log(`✅ SHERLOCK v24.0: Synced representative ${representativeId} debt: ${financialData.actualDebt} with immediate cache invalidation`);
     } catch (error) {
       console.error(`❌ Failed to sync representative ${representativeId} debt:`, error);
       throw error;

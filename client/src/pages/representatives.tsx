@@ -56,31 +56,53 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
 import { FinancialIntegrityCard } from "@/components/financial-integrity-card";
 
-// ✅ SHERLOCK v23.0: کامپوننت Real-time نمایش بدهی
+// ✅ SHERLOCK v24.0: کامپوننت Real-time نمایش بدهی با بهینه‌سازی
 function RealTimeDebtCell({ representativeId }: { representativeId: number }) {
-  const { data: financialData, isLoading } = useQuery({
-    queryKey: [`/api/unified-financial/representative/${representativeId}`],
+  const queryClient = useQueryClient();
+  
+  const { data: financialData, isLoading, error } = useQuery({
+    queryKey: [`unified-financial-representative-${representativeId}`],
     queryFn: () => apiRequest(`/api/unified-financial/representative/${representativeId}`),
     select: (response: any) => response.data || response,
-    staleTime: 30000, // 30 seconds cache
-    retry: 1
+    staleTime: 5000, // Reduced to 5 seconds for immediate updates
+    gcTime: 30000, // Keep in memory for 30 seconds
+    retry: 2,
+    refetchOnWindowFocus: false,
+    refetchOnMount: 'always'
   });
 
+  // Force refresh when payment operations complete
+  React.useEffect(() => {
+    const handlePaymentUpdate = () => {
+      queryClient.invalidateQueries({ 
+        queryKey: [`unified-financial-representative-${representativeId}`] 
+      });
+    };
+    
+    // Listen for custom payment update events
+    window.addEventListener(`payment-updated-${representativeId}`, handlePaymentUpdate);
+    
+    return () => {
+      window.removeEventListener(`payment-updated-${representativeId}`, handlePaymentUpdate);
+    };
+  }, [representativeId, queryClient]);
+
   if (isLoading) {
-    return <div className="animate-pulse bg-gray-200 h-4 w-16 rounded"></div>;
+    return <div className="animate-pulse bg-gray-200 dark:bg-gray-600 h-4 w-16 rounded"></div>;
   }
 
-  if (!financialData) {
-    return <span className="text-gray-400">-</span>;
+  if (error || !financialData) {
+    return <span className="text-gray-400 text-xs">خطا</span>;
   }
 
   const debt = financialData.actualDebt || 0;
 
   return (
-    <span className={
+    <span className={`transition-colors duration-200 ${
       debt > 1000000 ? "text-red-600 dark:text-red-400 font-semibold" : 
-      debt > 500000 ? "text-orange-600 dark:text-orange-400 font-semibold" : ""
-    }>
+      debt > 500000 ? "text-orange-600 dark:text-orange-400 font-semibold" : 
+      "text-green-600 dark:text-green-400"
+    }`}>
       {formatCurrency(debt)}
     </span>
   );
@@ -351,6 +373,30 @@ export default function Representatives() {
       toast({
         title: "خطا",
         description: error?.message || "خطا در بروزرسانی نماینده",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // ✅ SHERLOCK v24.0: همگام‌سازی صحیح بدهی نماینده
+  const syncRepresentativeDebtMutation = useMutation({
+    mutationFn: async (representativeId: number) => {
+      return apiRequest(`/api/unified-financial/sync-representative/${representativeId}`, {
+        method: "POST"
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-financial", "debtors"] });
+      toast({
+        title: "موفق",
+        description: "بدهی نماینده همگام‌سازی شد"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "خطا",
+        description: "خطا در همگام‌سازی بدهی نماینده",
         variant: "destructive"
       });
     }
@@ -2467,14 +2513,22 @@ function CreatePaymentDialog({
           method: "POST",
           data: paymentData
         });
-
-        // Update representative debt - now handled by backend
-        // await updateRepresentativeDebt(paymentAmount);
       }
+
+      // ✅ SHERLOCK v24.0: Immediate UI refresh with custom events
+      window.dispatchEvent(new CustomEvent(`payment-updated-${representative.id}`));
+      
+      // Force refresh all related data immediately
+      queryClient.invalidateQueries({ queryKey: ["representatives"] });
+      queryClient.invalidateQueries({ queryKey: [`unified-financial-representative-${representative.id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/unified-financial/debtors"] });
+      
+      // Trigger immediate re-fetch
+      await queryClient.refetchQueries({ queryKey: [`unified-financial-representative-${representative.id}`] });
 
       toast({
         title: "موفقیت",
-        description: "پرداخت با موفقیت ثبت و تخصیص داده شد"
+        description: "پرداخت با موفقیت ثبت و تخصیص داده شد - UI بروزرسانی شد"
       });
 
       // Reset form
@@ -2483,8 +2537,14 @@ function CreatePaymentDialog({
       setDescription("");
       setSelectedInvoiceId("auto");
 
-      // ✅ SHERLOCK v23.0: همگام‌سازی صحیح بدهی نماینده
-      await syncRepresentativeDebtMutation.mutateAsync(representative.id);
+      // ✅ SHERLOCK v24.0: همگام‌سازی با force cache invalidation
+      try {
+        await apiRequest(`/api/unified-financial/sync-representative/${representative.id}`, {
+          method: "POST"
+        });
+      } catch (syncError) {
+        console.warn("Sync warning (non-critical):", syncError);
+      }
 
       // Complete Financial Synchronization Checklist Implementation
       await performComprehensiveFinancialSync();
