@@ -83,8 +83,10 @@ export interface RecentActivity {
 // ========== UNIFIED STATISTICS ENGINE ========== 
 
 export class UnifiedStatisticsEngine {
-  private cacheExpiry = 5 * 60 * 1000; // 5 minutes
-  private cache: Map<string, { data: any; timestamp: number }> = new Map();
+  // Enhanced cache for performance optimization with separate cache keys
+  private static cache = new Map<string, { data: any; timestamp: number }>();
+  private static readonly CACHE_DURATION = 2 * 60 * 1000; // Reduced to 2 minutes for better data freshness
+  private static readonly REPRESENTATIVE_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes for representative data
 
   /**
    * دریافت آمار کامل سیستم - Dashboard اصلی
@@ -95,7 +97,7 @@ export class UnifiedStatisticsEngine {
 
     // Check cache
     const cached = this.cache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < this.cacheExpiry) {
+    if (cached && (Date.now() - cached.timestamp) < this.CACHE_DURATION) {
       return { 
         ...cached.data, 
         responseTime: Date.now() - startTime,
@@ -173,7 +175,7 @@ export class UnifiedStatisticsEngine {
     const cacheKey = 'representative-statistics';
 
     const cached = this.cache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < this.cacheExpiry) {
+    if (cached && (Date.now() - cached.timestamp) < this.REPRESENTATIVE_CACHE_DURATION) {
       return { ...cached.data, lastSyncTime: new Date().toISOString() };
     }
 

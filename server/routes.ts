@@ -53,6 +53,9 @@ import bcrypt from "bcryptjs";
 // New import for unified financial engine
 import { unifiedFinancialEngine } from './services/unified-financial-engine.js';
 
+// Import maintenance routes registration
+import { registerMaintenanceRoutes } from "./routes/maintenance-routes";
+
 // Configure multer for file uploads with broader JSON acceptance
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -96,6 +99,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register Settings routes (core system settings)
   registerSettingsRoutes(app);
+
+  // SHERLOCK v18.4: Register STANDARDIZED Invoice Routes - eliminates 11,117,500 تومان discrepancy
+  registerStandardizedInvoiceRoutes(app, requireAuth, storage);
+
+  // Register maintenance and monitoring routes
+  registerMaintenanceRoutes(app);
 
   // SHERLOCK v18.4: سیستم مالی یکپارچه واحد - تنها سیستم مالی فعال
   const unifiedFinancialRoutes = (await import('./routes/unified-financial-routes.js')).default;
@@ -2322,9 +2331,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   });
-
-  // 🚀 SHERLOCK v18.4: Register STANDARDIZED Invoice Routes - eliminates 11,117,500 تومان discrepancy
-  registerStandardizedInvoiceRoutes(app, requireAuth, storage);
 
   // ====== FINANCIAL INTEGRITY API ======
   // Get financial snapshot for representative

@@ -23,6 +23,7 @@ import { SupportStaffManagement } from './SupportStaffManagement.tsx';
 import { AiKnowledgeManager } from './AiKnowledgeManager.tsx';
 import { OffersManagement } from './OffersManagement.tsx';
 import { AiTestResults } from './AiTestResults.tsx';
+import QuickActionsPanel from './QuickActionsPanel';
 
 interface SettingsHubProps {
   userRole?: string;
@@ -93,7 +94,7 @@ export function SettingsHub({ userRole = 'CRM_MANAGER', permissions = [] }: Sett
   const visibleSections = settingsSections.filter(section => {
     // For now, show all sections to CRM_MANAGER
     if (userRole === 'CRM_MANAGER') return true;
-    
+
     // Add permission-based filtering here if needed
     return true;
   });
@@ -130,7 +131,7 @@ export function SettingsHub({ userRole = 'CRM_MANAGER', permissions = [] }: Sett
                       تب‌های فعال
                     </p>
                     <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                      {visibleSections.length}
+                      {visibleSections.length + 1}
                     </p>
                   </div>
                   <Shield className="w-8 h-8 text-blue-600 dark:text-blue-400" />
@@ -192,7 +193,13 @@ export function SettingsHub({ userRole = 'CRM_MANAGER', permissions = [] }: Sett
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Tab List */}
           <div className="overflow-x-auto">
-            <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 h-auto p-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+            <TabsList className="grid w-full grid-cols-7 h-auto p-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <TabsTrigger value="actions" className="flex flex-col items-center gap-2 p-4 data-[state=active]:bg-blue-50 dark:data-[state=active]:bg-blue-900">
+                <BarChart3 className="w-5 h-5" />
+                <span className="text-sm text-center leading-tight">
+                  اقدامات سریع
+                </span>
+              </TabsTrigger>
               {visibleSections.map((section) => {
                 const Icon = section.icon;
                 return (
@@ -212,6 +219,10 @@ export function SettingsHub({ userRole = 'CRM_MANAGER', permissions = [] }: Sett
           </div>
 
           {/* Tab Content */}
+          <TabsContent value="actions" className="space-y-4">
+            <QuickActionsPanel />
+          </TabsContent>
+
           {visibleSections.map((section) => {
             const Component = section.component;
             return (
