@@ -412,11 +412,34 @@ export default function Representatives() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/unified-financial"] });
+      queryClient.invalidateQueries({ queryKey: ["representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-financial", "debtors"] });
+      toast({
+        title: "موفق",
+        description: "بدهی نماینده همگام‌سازی شد"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "خطا",
+        description: "خطا در همگام‌سازی بدهی نماینده",
+        variant: "destructive"
+      });
     }
   });
+
+  // ✅ SHERLOCK v23.1: Automatic debt sync after payment
+  const handleAutomaticDebtSync = async (representativeId: number) => {
+    try {
+      await syncRepresentativeDebtMutation.mutateAsync(representativeId);
+      // Force refresh of representative data
+      queryClient.invalidateQueries({ queryKey: ["representative-details", representativeId] });
+      queryClient.invalidateQueries({ queryKey: ["representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+    } catch (error) {
+      console.error("Auto sync failed:", error);
+    }
+  };
 
   // Delete invoice mutation with automatic financial sync
   const deleteInvoiceMutation = useMutation({
@@ -1135,8 +1158,6 @@ export default function Representatives() {
                   )}
                 </CardContent>
               </Card>
-
-
             </div>
           )}
         </DialogContent>
@@ -2045,7 +2066,8 @@ function EditInvoiceDialog({
         amount,
         issueDate,
         status,
-        usageData: finalUsageData
+        usageData: finalUsageData,
+        representativeId: representative?.id // Pass representativeId for sync
       };
 
       await apiRequest(`/api/invoices/${invoice.id}`, {
@@ -2303,102 +2325,6 @@ function CreatePaymentDialog({
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>("auto");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async () => {
-    try {
-      setIsLoading(true);
-
-      if (!amount || !paymentDate) {
-        toast({
-          title: "خطا",
-          description: "مبلغ و تاریخ پرداخت الزامی است",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const paymentAmount = parseFloat(amount);
-
-      // Auto-allocation logic (Smart Payment Processing)
-      if (selectedInvoiceId === "auto") {
-        await handleAutoAllocation(paymentAmount);
-      } else {
-        // Manual allocation to specific invoice
-        const paymentData = {
-          representativeId: representative.id,
-          amount,
-          paymentDate,
-          description: description || `پرداخت برای ${representative.name}`,
-          invoiceId: selectedInvoiceId ? parseInt(selectedInvoiceId) : null,
-          isAllocated: !!selectedInvoiceId
-        };
-
-        await apiRequest("/api/crm/payments", {
-          method: "POST",
-          data: paymentData
-        });
-
-        // Update representative debt - now handled by backend
-        // await updateRepresentativeDebt(paymentAmount);
-      }
-
-      toast({
-        title: "موفقیت",
-        description: "پرداخت با موفقیت ثبت و تخصیص داده شد"
-      });
-
-      // Reset form
-      setAmount("");
-      setPaymentDate("");
-      setDescription("");
-      setSelectedInvoiceId("auto");
-
-      // ✅ SHERLOCK v23.0: همگام‌سازی صحیح بدهی نماینده
-      await syncRepresentativeDebtMutation.mutateAsync(representative.id);
-
-      // Complete Financial Synchronization Checklist Implementation
-      await performComprehensiveFinancialSync();
-
-      onSave();
-    } catch (error: any) {
-      console.error('Payment submission error:', error);
-      toast({
-        title: "خطا",
-        description: error?.message || "خطا در ثبت پرداخت",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Comprehensive Financial Synchronization Checklist
-  const performComprehensiveFinancialSync = async () => {
-    try {
-      // 1. Invalidate all related query caches
-      queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/representatives/${representative.code}`] });
-
-      // 2. Force refresh current representative data
-      await queryClient.refetchQueries({ queryKey: [`/api/representatives/${representative.code}`] });
-
-      // 3. Refresh parent component data if available
-      if (window.location.pathname.includes('/crm')) {
-        queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
-      }
-
-      // 4. Sync with admin panel cache if needed
-      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
-
-    } catch (syncError) {
-      console.warn('Financial sync warning:', syncError);
-    }
-  };
-
   // SHERLOCK v11.5: CRITICAL FIX - FIFO Auto-Allocation System (Oldest First)
   const handleAutoAllocation = async (paymentAmount: number) => {
     try {
@@ -2531,6 +2457,102 @@ function CreatePaymentDialog({
       setPaymentDate(getCurrentPersianDate());
     }
   }, [open, paymentDate]);
+
+  const handleSave = async () => {
+    try {
+      setIsLoading(true);
+
+      if (!amount || !paymentDate) {
+        toast({
+          title: "خطا",
+          description: "مبلغ و تاریخ پرداخت الزامی است",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const paymentAmount = parseFloat(amount);
+
+      // Auto-allocation logic (Smart Payment Processing)
+      if (selectedInvoiceId === "auto") {
+        await handleAutoAllocation(paymentAmount);
+      } else {
+        // Manual allocation to specific invoice
+        const paymentData = {
+          representativeId: representative.id,
+          amount,
+          paymentDate,
+          description: description || `پرداخت برای ${representative.name}`,
+          invoiceId: selectedInvoiceId ? parseInt(selectedInvoiceId) : null,
+          isAllocated: !!selectedInvoiceId
+        };
+
+        await apiRequest("/api/crm/payments", {
+          method: "POST",
+          data: paymentData
+        });
+
+        // Update representative debt - now handled by backend
+        // await updateRepresentativeDebt(paymentAmount);
+      }
+
+      toast({
+        title: "موفقیت",
+        description: "پرداخت با موفقیت ثبت و تخصیص داده شد"
+      });
+
+      // Reset form
+      setAmount("");
+      setPaymentDate("");
+      setDescription("");
+      setSelectedInvoiceId("auto");
+
+      // ✅ SHERLOCK v23.0: همگام‌سازی صحیح بدهی نماینده
+      await syncRepresentativeDebtMutation.mutateAsync(representative.id);
+
+      // Complete Financial Synchronization Checklist Implementation
+      await performComprehensiveFinancialSync();
+
+      onSave();
+    } catch (error: any) {
+      console.error('Payment submission error:', error);
+      toast({
+        title: "خطا",
+        description: error?.message || "خطا در ثبت پرداخت",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Comprehensive Financial Synchronization Checklist
+  const performComprehensiveFinancialSync = async () => {
+    try {
+      // 1. Invalidate all related query caches
+      queryClient.invalidateQueries({ queryKey: ["representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-statistics/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["crm/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["unified-statistics/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: [`representatives/${representative.code}`] });
+
+      // 2. Force refresh current representative data
+      await queryClient.refetchQueries({ queryKey: [`representatives/${representative.code}`] });
+
+      // 3. Refresh parent component data if available
+      if (window.location.pathname.includes('/crm')) {
+        queryClient.invalidateQueries({ queryKey: ["crm/representatives"] });
+      }
+
+      // 4. Sync with admin panel cache if needed
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+
+    } catch (syncError) {
+      console.warn('Financial sync warning:', syncError);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
