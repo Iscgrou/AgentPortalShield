@@ -75,7 +75,7 @@ function RealTimeDebtCell({ representativeId }: { representativeId: number }) {
   }
 
   const debt = financialData.actualDebt || 0;
-
+  
   return (
     <span className={
       debt > 1000000 ? "text-red-600 dark:text-red-400 font-semibold" : 
@@ -178,11 +178,6 @@ export default function Representatives() {
   const [sortBy, setSortBy] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const itemsPerPage = 30;
-
-  // State for sync operations
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<any>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -483,101 +478,6 @@ export default function Representatives() {
     }
   });
 
-  const handleSyncAllDebts = async () => {
-    setIsSyncing(true);
-    try {
-      const response = await fetch('/api/unified-financial/sync-all-representatives', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        toast({
-          title: "موفقیت",
-          description: "همگام‌سازی تمام نمایندگان با موفقیت انجام شد"
-        });
-        // Refresh the data
-        queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
-        queryClient.invalidateQueries({ queryKey: ["debtor-representatives"] });
-        queryClient.invalidateQueries({ queryKey: ["global-financial-summary"] });
-      } else {
-        toast({
-          title: "خطا",
-          description: '❌ خطا در همگام‌سازی: ' + (result.error || 'خطای ناشناخته'),
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Sync error:', error);
-      toast({
-        title: "خطا",
-        description: '❌ خطا در همگام‌سازی نمایندگان',
-        variant: "destructive"
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleVerifyTotalDebt = async () => {
-    setIsVerifying(true);
-    try {
-      const response = await fetch('/api/unified-financial/verify-total-debt', {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setVerificationResult(result.verification);
-        const calculations = result.verification.calculations;
-        const accuracy = result.verification.accuracy;
-
-        let message = `📊 نتایج تایید مجموع بدهی:\n\n`;
-        message += `💰 مبلغ مورد انتظار: ${result.verification.expectedAmount.toLocaleString('fa-IR')} تومان\n\n`;
-        message += `📈 محاسبات:\n`;
-        message += `• از جدول نمایندگان: ${calculations.fromRepresentativesTable.toLocaleString('fa-IR')} تومان\n`;
-        message += `• از موتور مالی: ${calculations.fromUnifiedEngine.toLocaleString('fa-IR')} تومان\n`;
-        message += `• از SQL مستقیم: ${calculations.fromDirectSQL.toLocaleString('fa-IR')} تومان\n\n`;
-        message += `✅ صحت:\n`;
-        message += `• جدول vs انتظار: ${accuracy.tableVsExpected ? '✅ صحیح' : '❌ ناصحیح'}\n`;
-        message += `• موتور vs انتظار: ${accuracy.engineVsExpected ? '✅ صحیح' : '❌ ناصحیح'}\n`;
-        message += `• SQL vs انتظار: ${accuracy.sqlVsExpected ? '✅ صحیح' : '❌ ناصحیح'}\n`;
-        message += `• همگام بودن همه روش‌ها: ${accuracy.allMethodsConsistent ? '✅ بله' : '❌ خیر'}\n\n`;
-        message += `📊 آمار:\n`;
-        message += `• کل نمایندگان: ${result.verification.statistics.totalRepresentatives}\n`;
-        message += `• نمایندگان بدهکار: ${result.verification.statistics.representativesWithDebt}\n`;
-
-        alert(message);
-      } else {
-        toast({
-          title: "خطا",
-          description: '❌ خطا در تایید: ' + (result.error || 'خطای ناشناخته'),
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Verification error:', error);
-      toast({
-        title: "خطا",
-        description: '❌ خطا در تایید مجموع بدهی',
-        variant: "destructive"
-      });
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -623,7 +523,7 @@ export default function Representatives() {
                 queryClient.invalidateQueries({ queryKey: ["/api/unified-financial"] });
                 queryClient.invalidateQueries({ queryKey: ["debtor-representatives"] });
                 queryClient.refetchQueries({ queryKey: ["/api/representatives"] });
-
+                
                 toast({
                   title: "موفقیت", 
                   description: "همگام‌سازی آمار مالی تمام نمایندگان کامل شد - جدول بروزرسانی شد"
@@ -840,41 +740,6 @@ export default function Representatives() {
         </CardContent>
       </Card>
 
-      {/* Header Buttons for Sync and Verification */}
-      <div className="flex justify-end gap-4 mt-4">
-        <Button
-          onClick={handleSyncAllDebts}
-          disabled={isSyncing}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          {isSyncing ? (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              در حال همگام‌سازی...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              همگام‌سازی تمام بدهی‌ها
-            </>
-          )}
-        </Button>
-        <Button
-          onClick={handleVerifyTotalDebt}
-          disabled={isVerifying}
-          className="bg-green-600 hover:bg-green-700 text-white"
-        >
-          {isVerifying ? (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              در حال تایید...
-            </>
-          ) : (
-            "تایید مجموع بدهی"
-          )}
-        </Button>
-      </div>
-
       {/* Representative Details Dialog */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
@@ -980,7 +845,7 @@ export default function Representatives() {
                       data-testid="button-add-payment"
                     >
                       <Plus className="w-4 h-4 ml-2" />
-                      ثبتپرداخت
+                      ثبت پرداخت
                     </Button>
                   </CardTitle>
                 </CardHeader>
