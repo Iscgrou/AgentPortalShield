@@ -119,7 +119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerUnifiedStatisticsRoutes(app, requireAuth);
 
   // Register database optimization routes
-  app.use('/api/database-optimization', databaseOptimizationRoutes.default);
+  app.use('/api/database-optimization', databaseOptimizationRoutes);
 
 
   // xAI Grok Configuration API
