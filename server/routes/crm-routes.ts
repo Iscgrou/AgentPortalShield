@@ -515,11 +515,14 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     try {
       const validatedData = insertPaymentSchema.parse(req.body);
 
-      const payment = await storage.createPayment(validatedData);
+      // Import storage directly to ensure access to all methods
+      const { storage: storageInstance } = await import('../storage');
+
+      const payment = await storageInstance.createPayment(validatedData);
       
       // Auto-allocate to oldest unpaid invoice if representativeId provided
       if (validatedData.representativeId) {
-        await storage.autoAllocatePaymentToInvoices(payment.id, validatedData.representativeId);
+        await storageInstance.autoAllocatePaymentToInvoices(payment.id, validatedData.representativeId);
       }
       
       res.json(payment);
@@ -585,6 +588,9 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
       const representativeId = parseInt(req.params.representativeId);
       const { amount, paymentDate, description, allocations, autoAllocated } = req.body;
 
+      // Import storage directly to ensure access to all methods
+      const { storage: storageInstance } = await import('../storage');
+
       // Create payment record
       const paymentData = {
         representativeId,
@@ -595,15 +601,15 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
         autoAllocated: autoAllocated || false
       };
 
-      const payment = await storage.createPayment(paymentData);
+      const payment = await storageInstance.createPayment(paymentData);
 
       // SHERLOCK v11.5: Process smart allocations with real-time status calculation
       if (allocations && allocations.length > 0) {
         for (const allocation of allocations) {
-          await storage.allocatePaymentToInvoice(payment.id, allocation.invoiceId);
+          await storageInstance.allocatePaymentToInvoice(payment.id, allocation.invoiceId);
           // CRITICAL: Calculate and update real invoice status based on actual payments
-          const calculatedStatus = await storage.calculateInvoicePaymentStatus(allocation.invoiceId);
-          await storage.updateInvoice(allocation.invoiceId, { status: calculatedStatus });
+          const calculatedStatus = await storageInstance.calculateInvoicePaymentStatus(allocation.invoiceId);
+          await storageInstance.updateInvoice(allocation.invoiceId, { status: calculatedStatus });
           console.log(`📊 Invoice ${allocation.invoiceId} status updated to: ${calculatedStatus}`);
         }
       }
