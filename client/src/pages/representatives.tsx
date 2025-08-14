@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Users, 
@@ -71,7 +71,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 // SHERLOCK v23.0: Enhanced error handling and routing fix
-import React, { useState, useEffect } from 'react';
+import React from 'react'; // This import is now correct
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -212,6 +212,8 @@ const representativeFormSchema = z.object({
   isActive: z.boolean().default(true)
 });
 
+// The main component logic starts here, duplicate imports are handled above.
+// This section is the actual export of the component
 export default function Representatives() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -230,7 +232,7 @@ export default function Representatives() {
   const [sortBy, setSortBy] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const itemsPerPage = 30;
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -268,17 +270,17 @@ export default function Representatives() {
         rep.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         rep.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
         rep.ownerName?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesStatus = 
         statusFilter === "all" || 
         (statusFilter === "active" && rep.isActive) ||
         (statusFilter === "inactive" && !rep.isActive);
-      
+
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
       let aValue: any, bValue: any;
-      
+
       switch (sortBy) {
         case 'code':
           aValue = a.code;
@@ -308,7 +310,7 @@ export default function Representatives() {
           aValue = a.name;
           bValue = b.name;
       }
-      
+
       if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
       if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
       return 0;
@@ -478,7 +480,7 @@ export default function Representatives() {
       });
       setIsDeleteConfirmOpen(false);
       setInvoiceToDelete(null);
-      
+
       // Refresh representative details if modal is open
       if (selectedRep) {
         handleViewDetails(selectedRep);
@@ -511,7 +513,7 @@ export default function Representatives() {
       });
       setIsPaymentDeleteConfirmOpen(false);
       setPaymentToDelete(null);
-      
+
       // Refresh representative details if modal is open
       if (selectedRep) {
         handleViewDetails(selectedRep);
@@ -698,7 +700,7 @@ export default function Representatives() {
               </TableBody>
             </Table>
           </div>
-          
+
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-2 mt-4">
@@ -710,7 +712,7 @@ export default function Representatives() {
               >
                 قبلی
               </Button>
-              
+
               <div className="flex gap-1">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let page;
@@ -723,7 +725,7 @@ export default function Representatives() {
                     page = start + i;
                     if (page > end) return null;
                   }
-                  
+
                   return (
                     <Button
                       key={page}
@@ -736,7 +738,7 @@ export default function Representatives() {
                   );
                 })}
               </div>
-              
+
               <Button
                 variant="outline"
                 size="sm"
@@ -1066,7 +1068,7 @@ export default function Representatives() {
               این عملیات قابل برگشت نیست و اطلاعات مالی نماینده به‌روزرسانی خواهد شد.
             </DialogDescription>
           </DialogHeader>
-          
+
           {invoiceToDelete && (
             <div className="space-y-4">
               <div className="bg-red-50 dark:bg-red-950 p-4 rounded-lg border border-red-200 dark:border-red-800">
@@ -1151,7 +1153,7 @@ export default function Representatives() {
               این عملیات قابل برگشت نیست و تمام آمار مالی در پنل مدیریت و CRM همگام‌سازی خواهد شد.
             </DialogDescription>
           </DialogHeader>
-          
+
           {paymentToDelete && (
             <div className="space-y-4">
               <div className="bg-red-50 dark:bg-red-950 p-4 rounded-lg border border-red-200 dark:border-red-800">
@@ -1302,7 +1304,7 @@ function CreateRepresentativeDialog({
             اطلاعات نماینده جدید را وارد کنید
           </DialogDescription>
         </DialogHeader>
-        
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
             <FormField
@@ -1467,7 +1469,7 @@ function EditRepresentativeDialog({
             اطلاعات نماینده را ویرایش کنید
           </DialogDescription>
         </DialogHeader>
-        
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
             <FormField
@@ -1623,7 +1625,7 @@ function EditInvoiceDialog({
   // Parse actual usage data from invoice - Enhanced for real data structures
   const parseUsageData = (usageData: any) => {
     // console.log('Parsing usage data:', usageData, 'Type:', typeof usageData);
-    
+
     if (!usageData) {
       // Return single item with invoice amount if no usage data
       return [{
@@ -1633,7 +1635,7 @@ function EditInvoiceDialog({
         amount: parseFloat(invoice.amount) || 0
       }];
     }
-    
+
     // If it's already an array (items format)
     if (Array.isArray(usageData)) {
       return usageData.map((item: any, index: number) => ({
@@ -1674,7 +1676,7 @@ function EditInvoiceDialog({
         amount: parseFloat(item.amount || item.price || item.cost || 0)
       }));
     }
-    
+
     // If it's a single usage object with specific structure, convert to array
     if (typeof usageData === 'object' && !Array.isArray(usageData)) {
       // Check for summary object with usage info
@@ -1707,7 +1709,7 @@ function EditInvoiceDialog({
                    Math.round(parseFloat(invoice.amount) / entries.length)
           }));
       }
-      
+
       // Single object fallback
       return [{
         id: 1,
@@ -1733,7 +1735,7 @@ function EditInvoiceDialog({
             // Try to extract amount from line if present
             const amountMatch = line.match(/(\d+[,\d]*)/g);
             const extractedAmount = amountMatch ? parseFloat(amountMatch[amountMatch.length - 1].replace(/,/g, '')) : 0;
-            
+
             return {
               id: index + 1,
               description: line.replace(/(\d+[,\d]*)/g, '').trim() || `سرویس ${index + 1}`,
@@ -1742,7 +1744,7 @@ function EditInvoiceDialog({
             };
           });
         }
-        
+
         // Single line fallback
         return [{
           id: 1,
@@ -1775,12 +1777,12 @@ function EditInvoiceDialog({
     const updatedItems = [...usageItems];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     setUsageItems(updatedItems);
-    
+
     // Update parsed usage data with items array
     const newUsageData = { ...parsedUsageData, items: updatedItems };
     setParsedUsageData(newUsageData);
     setUsageData(JSON.stringify(newUsageData, null, 2));
-    
+
     // Update total amount based on usage items
     const newTotal = calculateUsageTotal(updatedItems);
     setAmount(newTotal.toString());
@@ -1795,7 +1797,7 @@ function EditInvoiceDialog({
     };
     const updatedItems = [...usageItems, newItem];
     setUsageItems(updatedItems);
-    
+
     const newUsageData = { ...parsedUsageData, items: updatedItems };
     setParsedUsageData(newUsageData);
     setUsageData(JSON.stringify(newUsageData, null, 2));
@@ -1804,11 +1806,11 @@ function EditInvoiceDialog({
   const removeUsageItem = (index: number) => {
     const updatedItems = usageItems.filter((_, i) => i !== index);
     setUsageItems(updatedItems);
-    
+
     const newUsageData = { ...parsedUsageData, items: updatedItems };
     setParsedUsageData(newUsageData);
     setUsageData(JSON.stringify(newUsageData, null, 2));
-    
+
     // Update total amount
     const newTotal = calculateUsageTotal(updatedItems);
     setAmount(newTotal.toString());
@@ -1832,7 +1834,7 @@ function EditInvoiceDialog({
         <div className="col-span-1 text-center text-blue-200 text-sm font-medium">
           {index + 1}
         </div>
-        
+
         <div className="col-span-5">
           <Input
             value={item.description || ''}
@@ -1841,7 +1843,7 @@ function EditInvoiceDialog({
             className="bg-white/10 border-white/20 text-white text-sm focus:border-blue-400"
           />
         </div>
-        
+
         <div className="col-span-2">
           <Input
             value={item.date || ''}
@@ -1850,7 +1852,7 @@ function EditInvoiceDialog({
             className="bg-white/10 border-white/20 text-white text-sm focus:border-blue-400"
           />
         </div>
-        
+
         <div className="col-span-3">
           <Input
             type="number"
@@ -1860,7 +1862,7 @@ function EditInvoiceDialog({
             className="bg-white/10 border-white/20 text-white text-sm focus:border-blue-400"
           />
         </div>
-        
+
         <div className="col-span-1 flex justify-center">
           <Button
             type="button"
@@ -1879,7 +1881,7 @@ function EditInvoiceDialog({
   const handleSave = async () => {
     try {
       setIsLoading(true);
-      
+
       if (!amount || !issueDate) {
         toast({
           title: "خطا",
@@ -1921,7 +1923,7 @@ function EditInvoiceDialog({
         title: "موفقیت",
         description: `فاکتور بروزرسانی شد${amountDifference !== 0 ? ' - سیستم مالی همگام‌سازی گردید' : ''}`,
       });
-      
+
       onSave();
       onOpenChange(false);
     } catch (error: any) {
@@ -1940,7 +1942,7 @@ function EditInvoiceDialog({
   const performFinancialSynchronization = async (representativeId: number, amountDifference: number, newAmount: number, oldAmount: number) => {
     try {
       console.log('Starting financial synchronization:', { representativeId, amountDifference, newAmount, oldAmount });
-      
+
       // 1. Direct debt synchronization via CRM endpoint (most reliable)
       const syncResponse = await apiRequest(`/api/crm/representatives/${representativeId}/sync-debt`, {
         method: "POST",
@@ -1951,10 +1953,10 @@ function EditInvoiceDialog({
           timestamp: new Date().toISOString()
         }
       });
-      
+
       // Force refresh representative data to reflect changes
       await new Promise(resolve => setTimeout(resolve, 500)); // Wait for database to sync
-      
+
       console.log('Debt synchronization completed:', syncResponse);
 
       // 2. Recalculate invoice payment status if needed
@@ -1964,7 +1966,7 @@ function EditInvoiceDialog({
           const paymentsResponse = await apiRequest(`/api/payments?invoiceId=${invoice.id}`);
           const payments = Array.isArray(paymentsResponse) ? paymentsResponse : [];
           const totalPaid = payments.reduce((sum: number, p: any) => sum + parseFloat(p.amount || 0), 0);
-          
+
           if (totalPaid < newAmount) {
             // Update status to partial since payment is no longer sufficient
             await apiRequest(`/api/invoices/${invoice.id}`, {
@@ -2019,7 +2021,7 @@ function EditInvoiceDialog({
             ویرایش اطلاعات فاکتور شماره {invoice.invoiceNumber}
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-4 p-1">
           <div>
             <Label htmlFor="invoiceNumber" className="text-white">شماره فاکتور</Label>
@@ -2075,7 +2077,7 @@ function EditInvoiceDialog({
                 <div className="text-sm text-blue-200 mb-3">
                   ویرایش سطر به سطر جزئیات مصرف و مبلغ هر قلم:
                 </div>
-                
+
                 {/* Usage Details Table */}
                 <div className="bg-white/5 border border-white/10 rounded-lg overflow-hidden">
                   <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 px-4 py-2 border-b border-white/10">
@@ -2086,7 +2088,7 @@ function EditInvoiceDialog({
                       <div>مبلغ (ریال)</div>
                     </div>
                   </div>
-                  
+
                   <div className="p-4 space-y-3">
                     {renderUsageDetailsEditor()}
                   </div>
@@ -2102,7 +2104,7 @@ function EditInvoiceDialog({
                     <Plus className="w-4 h-4 mr-1" />
                     افزودن ردیف جدید
                   </Button>
-                  
+
                   <div className="text-sm text-blue-200">
                     مجموع: {calculateUsageTotal().toLocaleString('fa-IR')} ریال
                   </div>
@@ -2160,7 +2162,7 @@ function CreatePaymentDialog({
   const handleSave = async () => {
     try {
       setIsLoading(true);
-      
+
       if (!amount || !paymentDate) {
         toast({
           title: "خطا",
@@ -2171,7 +2173,7 @@ function CreatePaymentDialog({
       }
 
       const paymentAmount = parseFloat(amount);
-      
+
       // Auto-allocation logic (Smart Payment Processing)
       if (selectedInvoiceId === "auto") {
         await handleAutoAllocation(paymentAmount);
@@ -2190,7 +2192,7 @@ function CreatePaymentDialog({
           method: "POST",
           data: paymentData
         });
-        
+
         // Update representative debt - now handled by backend
         // await updateRepresentativeDebt(paymentAmount);
       }
@@ -2199,16 +2201,16 @@ function CreatePaymentDialog({
         title: "موفقیت",
         description: "پرداخت با موفقیت ثبت و تخصیص داده شد"
       });
-      
+
       // Reset form
       setAmount("");
       setPaymentDate("");
       setDescription("");
       setSelectedInvoiceId("auto");
-      
+
       // Complete Financial Synchronization Checklist Implementation
       await performComprehensiveFinancialSync();
-      
+
       onSave();
     } catch (error: any) {
       console.error('Payment submission error:', error);
@@ -2232,19 +2234,19 @@ function CreatePaymentDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       queryClient.invalidateQueries({ queryKey: [`/api/representatives/${representative.code}`] });
-      
+
       // 2. Force refresh current representative data
       await queryClient.refetchQueries({ queryKey: [`/api/representatives/${representative.code}`] });
-      
+
       // 3. Refresh parent component data if available
       if (window.location.pathname.includes('/crm')) {
         queryClient.invalidateQueries({ queryKey: ["/api/crm/representatives"] });
       }
-      
+
       // 4. Sync with admin panel cache if needed
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
-      
+
     } catch (syncError) {
       console.warn('Financial sync warning:', syncError);
     }
@@ -2254,7 +2256,7 @@ function CreatePaymentDialog({
   const handleAutoAllocation = async (paymentAmount: number) => {
     try {
       console.log('🔧 SHERLOCK v11.5 FIFO: Starting auto-allocation for oldest invoices first');
-      
+
       // CRITICAL: Get unpaid invoices sorted by date (OLDEST FIRST - FIFO principle)
       const unpaidInvoices = (representative as any).invoices?.filter(
         (inv: any) => inv.status === 'unpaid' || inv.status === 'partial' || inv.status === 'overdue'
@@ -2264,7 +2266,7 @@ function CreatePaymentDialog({
         const dateB = new Date(b.issueDate || b.createdAt).getTime();
         return dateA - dateB; // Ascending: oldest first
       }) || [];
-      
+
       console.log(`📊 FIFO Order: Processing ${unpaidInvoices.length} invoices from oldest to newest`);
       if (unpaidInvoices.length > 0) {
         console.log(`🔍 First invoice (oldest): ${unpaidInvoices[0].invoiceNumber} - ${unpaidInvoices[0].issueDate || unpaidInvoices[0].createdAt}`);
@@ -2273,38 +2275,38 @@ function CreatePaymentDialog({
 
       let remainingAmount = paymentAmount;
       const allocations: Array<{invoiceId: number, amount: number, newStatus: string}> = [];
-      
+
       // Process invoices in FIFO order (oldest first)
       for (const invoice of unpaidInvoices) {
         if (remainingAmount <= 0) break;
-        
+
         console.log(`🔄 Processing invoice ${invoice.invoiceNumber} (${invoice.issueDate || invoice.createdAt}) - Amount: ${invoice.amount}`);
-        
+
         const invoiceAmount = parseFloat(invoice.amount);
-        
+
         // Get already paid amount for partial invoices
         const alreadyPaidAmount = invoice.status === 'partial' 
           ? await getCurrentlyPaidAmount(invoice.id)
           : 0;
-        
+
         const remainingInvoiceAmount = invoiceAmount - alreadyPaidAmount;
         const allocationAmount = Math.min(remainingAmount, remainingInvoiceAmount);
-        
+
         if (allocationAmount > 0) {
           const totalAfterPayment = alreadyPaidAmount + allocationAmount;
           const newStatus = totalAfterPayment >= invoiceAmount ? 'paid' : 'partial';
-          
+
           allocations.push({
             invoiceId: invoice.id,
             amount: allocationAmount,
             newStatus
           });
-          
+
           console.log(`✅ Allocated ${allocationAmount} to invoice ${invoice.invoiceNumber} - Status: ${newStatus}`);
           remainingAmount -= allocationAmount;
         }
       }
-      
+
       console.log(`📊 FIFO allocation complete. ${allocations.length} invoices allocated, ${remainingAmount} remaining`);
 
       // Create payment record
@@ -2322,10 +2324,10 @@ function CreatePaymentDialog({
         method: "POST",
         data: paymentData
       });
-      
+
       // Update representative debt - now handled by backend
       // await updateRepresentativeDebt(paymentAmount);
-      
+
     } catch (error) {
       throw error;
     }
@@ -2347,23 +2349,23 @@ function CreatePaymentDialog({
   const updateRepresentativeDebt = async (paymentAmount: number) => {
     const currentDebt = parseFloat(representative.totalDebt);
     const newDebt = currentDebt - paymentAmount;
-    
+
     // Handle credit (overpayment) scenarios
     const updateData: any = {
       totalDebt: Math.max(0, newDebt).toString()
     };
-    
+
     if (newDebt < 0) {
       // Representative has overpaid - convert to credit
       updateData.credit = Math.abs(newDebt).toString();
       updateData.totalDebt = "0";
     }
-    
+
     await apiRequest(`/api/crm/representatives/${representative.id}`, {
       method: "PUT",
       data: updateData
     });
-    
+
     // Sync with CRM system
     await apiRequest(`/api/crm/representatives/${representative.id}/sync-debt`, {
       method: "POST",
@@ -2397,7 +2399,7 @@ function CreatePaymentDialog({
             ثبت پرداخت برای {representative.name}
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-4 text-white">
           <div>
             <Label htmlFor="amount" className="text-white">مبلغ پرداخت (ریال) *</Label>

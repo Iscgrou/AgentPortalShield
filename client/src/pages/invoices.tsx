@@ -1,5 +1,4 @@
 // SHERLOCK v23.0: Enhanced invoices page with API connection
-import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiRequest } from '@/lib/queryClient';
