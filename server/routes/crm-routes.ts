@@ -23,7 +23,7 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  // 🔐 CRM Authentication Routes - Fixed Implementation
+  // 🔐 CRM Authentication Routes - Enhanced Implementation
   app.post('/api/crm/auth/login', async (req: any, res: any) => {
     try {
       const { username, password } = req.body;
@@ -40,15 +40,38 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
       const authResult = await CrmAuthService.authenticate({ username, password });
       
       if (authResult.success && authResult.user) {
-        // Store in session
-        req.session.crmAuthenticated = true;
-        req.session.crmUser = authResult.user;
+        // Clear any existing sessions
+        req.session.crmAuthenticated = false;
+        req.session.crmUser = null;
         
-        console.log('✅ CRM Login Success:', username);
+        // Set new session
+        req.session.crmAuthenticated = true;
+        req.session.crmUser = {
+          id: Math.floor(Math.random() * 1000) + 1, // Generate ID
+          username: authResult.user.username,
+          fullName: authResult.user.username === 'crm' ? 'کاربر CRM' : 'مدیر سیستم',
+          role: authResult.user.role,
+          panelType: authResult.user.panelType,
+          permissions: authResult.user.permissions
+        };
+        
+        // Force session save
+        await new Promise((resolve, reject) => {
+          req.session.save((err: any) => {
+            if (err) reject(err);
+            else resolve(true);
+          });
+        });
+        
+        console.log('✅ CRM Login Success:', {
+          username,
+          sessionId: req.sessionID,
+          role: authResult.user.role
+        });
         
         res.json({
           success: true,
-          user: authResult.user,
+          user: req.session.crmUser,
           message: 'ورود موفقیت‌آمیز'
         });
       } else {
@@ -67,7 +90,7 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  // 📊 CRM User Info Endpoint - Fixed Implementation
+  // 📊 CRM User Info Endpoint - Enhanced Implementation
   app.get('/api/crm/auth/user', (req: any, res: any) => {
     try {
       console.log('🔍 CRM Auth Check:', {
@@ -76,12 +99,12 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
         adminAuthenticated: req.session?.authenticated,
         hasCrmUser: !!req.session?.crmUser,
         hasAdminUser: !!req.session?.user,
-        userAgent: req.headers['user-agent']?.substring(0, 50)
+        cookies: req.headers.cookie ? 'present' : 'missing'
       });
 
-      // Check CRM authentication
-      if (req.session?.crmAuthenticated && req.session?.crmUser) {
-        console.log('✅ CRM Auth Success - CRM User');
+      // Check CRM authentication first
+      if (req.session?.crmAuthenticated === true && req.session?.crmUser) {
+        console.log('✅ CRM Auth Success - CRM User:', req.session.crmUser.username);
         return res.json({
           success: true,
           user: req.session.crmUser
@@ -89,8 +112,8 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
       }
 
       // Check admin cross-authentication
-      if (req.session?.authenticated && req.session?.user) {
-        console.log('✅ CRM Auth Success - Admin Cross-Auth');
+      if (req.session?.authenticated === true && req.session?.user) {
+        console.log('✅ CRM Auth Success - Admin Cross-Auth:', req.session.user.username);
         return res.json({
           success: true,
           user: {
@@ -104,7 +127,7 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
       }
 
       // Not authenticated
-      console.log('❌ CRM Auth Failed - Session invalid or expired');
+      console.log('❌ CRM Auth Failed - No valid session');
       res.status(401).json({
         error: 'احراز هویت نشده',
         sessionId: req.sessionID
@@ -118,12 +141,17 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  // 🚪 CRM Logout
-  app.post('/api/crm/auth/logout', (req: any, res: any) => {
+  // 🚪 CRM Logout - Enhanced
+  app.post('/api/crm/auth/logout', async (req: any, res: any) => {
     try {
       if (req.session) {
         req.session.crmAuthenticated = false;
         req.session.crmUser = null;
+        
+        // Force session save
+        await new Promise((resolve) => {
+          req.session.save(() => resolve(true));
+        });
       }
       
       console.log('✅ CRM Logout Success');
@@ -137,15 +165,21 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  // CRM Authentication Middleware - Simplified
+  // CRM Authentication Middleware - Enhanced
   const crmAuthMiddleware = (req: any, res: any, next: any) => {
-    const isCrmAuthenticated = req.session?.crmAuthenticated === true || req.session?.crmUser;
+    const isCrmAuthenticated = req.session?.crmAuthenticated === true && req.session?.crmUser;
     const isAdminAuthenticated = req.session?.authenticated === true && req.session?.user;
     const isAuthenticated = isCrmAuthenticated || isAdminAuthenticated;
     
+    console.log(`🔍 CRM Middleware Check: ${req.method} ${req.path}`, {
+      sessionId: req.sessionID,
+      crmAuth: !!isCrmAuthenticated,
+      adminAuth: !!isAdminAuthenticated,
+      authenticated: isAuthenticated
+    });
+    
     if (isAuthenticated) {
       req.session.touch();
-      console.log(`✅ CRM Auth Success: ${req.method} ${req.path}`);
       next();
     } else {
       console.log(`❌ CRM Auth Denied: ${req.method} ${req.path}`);
@@ -216,5 +250,5 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     }
   });
 
-  console.log('✅ CRM Routes registered successfully');
+  console.log('✅ Enhanced CRM Routes registered successfully');
 }

@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,91 +7,75 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/auth-context";
-import { useCrmAuth } from "@/hooks/use-crm-auth";
+import { AlertCircle, Loader2 } from "lucide-react";
 
 export default function UnifiedAuth() {
-  const [location, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState("admin");
+  const [, setLocation] = useLocation();
+  const [activeTab, setActiveTab] = useState<'admin' | 'crm'>("admin");
   const [credentials, setCredentials] = useState({ username: "", password: "" });
-  const redirected = useRef(false);
-  const mounted = useRef(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { isAuthenticated: adminAuth, isLoading: adminLoading, loginMutation: adminLogin } = useAuth();
-  const { isAuthenticated: crmAuth, isLoading: crmLoading, loginMutation: crmLogin } = useCrmAuth();
+  const { user, isAuthenticated, isLoading, login } = useAuth();
 
-  const handleAuthRedirect = useCallback(() => {
-    if (redirected.current || !mounted.current) return;
-
-    // Only redirect when authentication is confirmed and loading is complete
-    if (!adminLoading && !crmLoading) {
-      if (adminAuth && location === '/') {
-        console.log('✅ Admin authenticated, redirecting...');
-        redirected.current = true;
-        setTimeout(() => {
-          if (mounted.current) {
-            setLocation("/admin");
-          }
-        }, 100);
-        return;
-      }
-
-      if (crmAuth && location === '/') {
-        console.log('✅ CRM authenticated, redirecting...');
-        redirected.current = true;
-        setTimeout(() => {
-          if (mounted.current) {
-            setLocation("/crm");
-          }
-        }, 100);
-        return;
-      }
-    }
-  }, [adminAuth, crmAuth, adminLoading, crmLoading, setLocation, location]);
-
+  // Handle redirect when authenticated
   useEffect(() => {
-    mounted.current = true;
-    handleAuthRedirect();
-    
-    return () => {
-      mounted.current = false;
-    };
-  }, [handleAuthRedirect]);
+    if (isAuthenticated && user && !isLoading) {
+      const targetPath = user.role === 'ADMIN' ? '/admin' : '/crm';
+      console.log(`✅ Redirecting to ${targetPath} for ${user.role}`);
+      setLocation(targetPath);
+    }
+  }, [isAuthenticated, user, isLoading, setLocation]);
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!credentials.username || !credentials.password || !mounted.current) return;
+    if (!credentials.username || !credentials.password) {
+      setError('نام کاربری و رمز عبور الزامی است');
+      return;
+    }
+
+    setError(null);
+    setIsSubmitting(true);
 
     try {
-      if (activeTab === "admin") {
-        console.log('🔐 Attempting admin login...');
-        await adminLogin.mutateAsync(credentials);
-      } else {
-        console.log('🔐 Attempting CRM login...');
-        await crmLogin.mutateAsync(credentials);
-      }
-    } catch (error) {
-      console.error('❌ Login failed:', error);
+      await login(credentials, activeTab);
+      // Redirect will be handled by useEffect above
+    } catch (err: any) {
+      setError(err.message || 'خطا در ورود به سیستم');
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [credentials, activeTab, adminLogin, crmLogin]);
+  };
 
-  const isLoading = adminLogin.isPending || crmLogin.isPending || adminLoading || crmLoading;
-  const error = adminLogin.error || crmLogin.error;
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+          <p className="text-gray-600 dark:text-gray-400">در حال بررسی احراز هویت...</p>
+        </div>
+      </div>
+    );
+  }
 
-  // Don't render if already authenticated and redirecting
-  if (((adminAuth || crmAuth) && !isLoading) || location !== '/') {
+  // Don't render login form if already authenticated
+  if (isAuthenticated && user) {
     return null;
   }
+
+  const isProcessing = isSubmitting || isLoading;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">🚀 ورود به سیستم</CardTitle>
+          <CardTitle className="text-2xl font-bold">🚀 ورود به سیستم شرلوک</CardTitle>
           <CardDescription>انتخاب کنید که با کدام پنل وارد می‌شوید</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'admin' | 'crm')} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="admin" className="relative">
                 مدیر سیستم
@@ -127,10 +111,14 @@ export default function UnifiedAuth() {
                 id="username"
                 type="text"
                 value={credentials.username}
-                onChange={(e) => setCredentials(prev => ({ ...prev, username: e.target.value }))}
+                onChange={(e) => {
+                  setCredentials(prev => ({ ...prev, username: e.target.value }));
+                  setError(null);
+                }}
                 placeholder="نام کاربری خود را وارد کنید"
-                disabled={isLoading}
+                disabled={isProcessing}
                 className="text-right"
+                autoComplete="username"
               />
             </div>
 
@@ -142,31 +130,43 @@ export default function UnifiedAuth() {
                 id="password"
                 type="password"
                 value={credentials.password}
-                onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
+                onChange={(e) => {
+                  setCredentials(prev => ({ ...prev, password: e.target.value }));
+                  setError(null);
+                }}
                 placeholder="رمز عبور خود را وارد کنید"
-                disabled={isLoading}
+                disabled={isProcessing}
                 className="text-right"
+                autoComplete="current-password"
               />
             </div>
 
             {error && (
-              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-                {error.message || 'خطا در ورود به سیستم'}
+              <div className="flex items-center gap-2 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                <AlertCircle className="h-4 w-4" />
+                <span>{error}</span>
               </div>
             )}
 
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={isLoading || !credentials.username || !credentials.password}
+              disabled={isProcessing || !credentials.username || !credentials.password}
             >
-              {isLoading ? "در حال ورود..." : `ورود به ${activeTab === 'admin' ? 'پنل مدیریت' : 'پنل CRM'}`}
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  در حال ورود...
+                </>
+              ) : (
+                `ورود به ${activeTab === 'admin' ? 'پنل مدیریت' : 'پنل CRM'}`
+              )}
             </Button>
           </form>
 
           <div className="mt-6 text-xs text-gray-500 text-center">
-            <p>🔒 ورود امن با تأیید دو مرحله‌ای</p>
-            <p className="mt-1">نسخه: SHERLOCK v12.2 | وضعیت: پایدار ✅</p>
+            <p>🔒 ورود امن با احراز هویت یکپارچه</p>
+            <p className="mt-1">نسخه: SHERLOCK v13.0 | وضعیت: پایدار ✅</p>
           </div>
         </CardContent>
       </Card>

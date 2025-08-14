@@ -1,123 +1,187 @@
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
+interface User {
+  id: number;
+  username: string;
+  fullName?: string;
+  role: 'ADMIN' | 'CRM';
+  panelType: 'ADMIN_PANEL' | 'CRM_PANEL';
+  sessionId?: string;
+}
+
 interface AuthContextType {
+  user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: () => void;
-  logout: () => void;
-  checkAuth: () => Promise<void>;
-  loginMutation: any;
+  isAdminUser: boolean;
+  isCrmUser: boolean;
+  login: (credentials: LoginCredentials, panelType: 'admin' | 'crm') => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+interface LoginCredentials {
+  username: string;
+  password: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [authChecked, setAuthChecked] = useState(false);
-  const checkingAuth = useRef(false);
-  const mounted = useRef(true);
 
-  const loginMutation = useMutation({
-    mutationFn: async (credentials: { username: string; password: string }) => {
-      console.log('🔐 Admin Login Request:', credentials.username);
-      const response = await apiRequest('/api/auth/login', { method: 'POST', data: credentials });
-      return response;
+  // Unified auth check query - single source of truth
+  const authQuery = useQuery({
+    queryKey: ['auth-status'],
+    queryFn: async () => {
+      try {
+        // Try CRM auth first
+        const crmResponse = await apiRequest('/api/crm/auth/user');
+        if (crmResponse?.success && crmResponse.user) {
+          return { 
+            user: crmResponse.user, 
+            source: 'crm',
+            authenticated: true 
+          };
+        }
+      } catch (error) {
+        console.log('CRM auth check failed, trying admin...');
+      }
+
+      try {
+        // Try admin auth
+        const adminResponse = await fetch('/api/auth/check', { 
+          credentials: 'include' 
+        });
+        if (adminResponse.ok) {
+          const adminData = await adminResponse.json();
+          if (adminData.authenticated && adminData.user) {
+            return {
+              user: {
+                id: adminData.user.id,
+                username: adminData.user.username,
+                role: 'ADMIN' as const,
+                panelType: 'ADMIN_PANEL' as const,
+                fullName: 'مدیر سیستم'
+              },
+              source: 'admin',
+              authenticated: true
+            };
+          }
+        }
+      } catch (error) {
+        console.log('Admin auth check failed');
+      }
+
+      return { user: null, source: null, authenticated: false };
     },
-    onSuccess: (data) => {
-      if (!mounted.current) return;
+    staleTime: 30000, // 30 seconds
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true
+  });
+
+  // Update state when auth query resolves
+  useEffect(() => {
+    if (authQuery.data !== undefined) {
+      const { user: userData, authenticated } = authQuery.data;
+      setUser(userData);
+      setIsAuthenticated(authenticated);
+      setIsLoading(false);
       
-      console.log('✅ Admin Login Success');
-      setIsAuthenticated(true);
-      setAuthChecked(true);
+      console.log('🔐 Auth State Updated:', {
+        authenticated,
+        user: userData?.username,
+        role: userData?.role,
+        source: authQuery.data.source
+      });
+    }
+  }, [authQuery.data]);
+
+  // Set initial loading from query state
+  useEffect(() => {
+    setIsLoading(authQuery.isLoading);
+  }, [authQuery.isLoading]);
+
+  // Login mutation
+  const loginMutation = useMutation({
+    mutationFn: async ({ credentials, panelType }: { credentials: LoginCredentials; panelType: 'admin' | 'crm' }) => {
+      const endpoint = panelType === 'admin' ? '/api/auth/login' : '/api/crm/auth/login';
+      
+      console.log(`🔐 Login attempt: ${panelType}`, credentials.username);
+      
+      const response = await apiRequest(endpoint, {
+        method: 'POST',
+        data: credentials
+      });
+
+      return { response, panelType };
+    },
+    onSuccess: ({ response, panelType }) => {
+      console.log(`✅ Login Success: ${panelType}`, response);
+      
+      // Force auth query refetch
+      authQuery.refetch();
     },
     onError: (error: any) => {
-      if (!mounted.current) return;
-      
-      console.error('❌ Admin Login Error:', error);
-      setIsAuthenticated(false);
+      console.error('❌ Login Error:', error);
+      throw error;
     }
   });
 
-  const checkAuth = useCallback(async () => {
-    if (authChecked || checkingAuth.current || !mounted.current) {
-      return;
-    }
-    
-    checkingAuth.current = true;
-    
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/auth/check", { 
-        credentials: "include",
-        method: "GET"
-      });
+  // Logout mutation
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const logoutPromises = [];
       
-      if (!mounted.current) return;
-      
-      const isValid = response.ok;
-      setIsAuthenticated(isValid);
-      
-      console.log(isValid ? '✅ Admin Auth Valid' : '❌ Admin Auth Invalid');
-    } catch (error) {
-      if (!mounted.current) return;
-      
-      console.log('❌ Admin Auth Check Failed');
-      setIsAuthenticated(false);
-    } finally {
-      if (mounted.current) {
-        setIsLoading(false);
-        setAuthChecked(true);
+      // Try both logout endpoints
+      if (user?.role === 'ADMIN') {
+        logoutPromises.push(
+          fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+        );
       }
-      checkingAuth.current = false;
-    }
-  }, [authChecked]);
+      
+      if (user?.role === 'CRM' || user?.panelType === 'CRM_PANEL') {
+        logoutPromises.push(
+          apiRequest('/api/crm/auth/logout', { method: 'POST' })
+        );
+      }
 
-  const login = useCallback(() => {
-    if (!mounted.current) return;
-    setIsAuthenticated(true);
-    setAuthChecked(true);
-  }, []);
+      await Promise.allSettled(logoutPromises);
+    },
+    onSuccess: () => {
+      console.log('✅ Logout Success');
+      setUser(null);
+      setIsAuthenticated(false);
+      authQuery.refetch();
+    }
+  });
+
+  const login = useCallback(async (credentials: LoginCredentials, panelType: 'admin' | 'crm') => {
+    await loginMutation.mutateAsync({ credentials, panelType });
+  }, [loginMutation]);
 
   const logout = useCallback(async () => {
-    try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    } catch (error) {
-      console.log('❌ Logout request failed');
-    } finally {
-      if (mounted.current) {
-        setIsAuthenticated(false);
-        setAuthChecked(false);
-      }
-    }
-  }, []);
+    await logoutMutation.mutateAsync();
+  }, [logoutMutation]);
 
-  // Single auth check on mount only
-  useEffect(() => {
-    mounted.current = true;
-    
-    if (!authChecked && !checkingAuth.current) {
-      console.log('🔍 Admin Auth: Initial check');
-      checkAuth();
-    }
-
-    return () => {
-      mounted.current = false;
-    };
-  }, []); // Empty dependency array to run only once on mount
+  const isAdminUser = user?.role === 'ADMIN';
+  const isCrmUser = user?.role === 'CRM';
 
   return (
     <AuthContext.Provider
       value={{
+        user,
         isAuthenticated,
         isLoading,
+        isAdminUser,
+        isCrmUser,
         login,
         logout,
-        checkAuth,
-        loginMutation,
       }}
     >
       {children}
