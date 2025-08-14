@@ -85,8 +85,8 @@ export interface RecentActivity {
 export class UnifiedStatisticsEngine {
   // Enhanced cache for performance optimization with separate cache keys
   private static cache = new Map<string, { data: any; timestamp: number }>();
-  private static readonly CACHE_DURATION = 2 * 60 * 1000; // Reduced to 2 minutes for better data freshness
-  private static readonly REPRESENTATIVE_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes for representative data
+  private static readonly CACHE_DURATION = 5 * 60 * 1000; // Increased to 5 minutes for better performance
+  private static readonly REPRESENTATIVE_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes for representative data
 
   /**
    * دریافت آمار کامل سیستم - Dashboard اصلی
@@ -106,6 +106,7 @@ export class UnifiedStatisticsEngine {
     }
 
     console.log("🚀 SHERLOCK v18.0: Generating fresh global statistics...");
+    const perfStart = Date.now();
 
     // Financial Overview - از Financial Integrity Engine
     const [
@@ -123,6 +124,8 @@ export class UnifiedStatisticsEngine {
       this.calculateSystemHealth(),
       this.getRecentActivities(5)
     ]);
+
+    console.log(`⏱️ Calculations completed in ${Date.now() - perfStart}ms`);
 
     const globalStats: GlobalStatistics = {
       // Financial
@@ -358,14 +361,13 @@ export class UnifiedStatisticsEngine {
 
   private async calculateSystemHealth() {
     try {
-      // ✅ استفاده از UNIFIED FINANCIAL ENGINE
-      const allData = await unifiedFinancialEngine.calculateAllRepresentatives();
-      const problematicReps = allData.filter(rep => rep.debtLevel === 'CRITICAL' || rep.debtLevel === 'HIGH');
+      // SHERLOCK v18.0 PERFORMANCE: Skip expensive full calculation for now
+      const problematicCount = await this.getProblematicRepresentativesCount();
       const analysis = {
-        totalProblematicCount: problematicReps.length,
+        totalProblematicCount: problematicCount,
         excessPaymentReps: [],
         reconciliationNeeded: [],
-        lowIntegrityReps: problematicReps
+        lowIntegrityReps: []
       };
 
       // محاسبه میانگین امتیاز سلامت سیستم
@@ -374,7 +376,8 @@ export class UnifiedStatisticsEngine {
       let totalIntegrityScore = 0;
       let validScores = 0;
 
-      for (const rep of representativeIds.slice(0, 50)) { // Sample for performance
+      // SHERLOCK v18.0 PERFORMANCE: Reduce sample size for faster response
+      for (const rep of representativeIds.slice(0, 10)) { // Reduced to 10 for better performance
         try {
           const data = await unifiedFinancialEngine.calculateRepresentative(rep.id);
           // محاسبه امتیاز یکپارچگی بر اساس سطح بدهی
@@ -451,6 +454,24 @@ export class UnifiedStatisticsEngine {
     );
 
     return repsWithScores;
+  }
+
+  /**
+   * محاسبه سریع تعداد نمایندگان مشکل‌دار بدون محاسبات سنگین
+   */
+  private async getProblematicRepresentativesCount(): Promise<number> {
+    try {
+      // محاسبه سریع بر اساس بدهی بالا
+      const result = await db.select({
+        count: sql<number>`COUNT(*)`
+      }).from(representatives)
+      .where(sql`CAST(total_debt as DECIMAL) > 100000`); // بدهی بالای 100 هزار تومان
+
+      return result[0]?.count || 0;
+    } catch (error) {
+      console.error("Error calculating problematic representatives count:", error);
+      return 0;
+    }
   }
 }
 
