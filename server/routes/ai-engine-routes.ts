@@ -11,7 +11,7 @@ const authMiddleware = CrmAuthService.createAuthMiddleware();
 router.post('/profile/:representativeId', authMiddleware, async (req, res) => {
   try {
     const representativeId = parseInt(req.params.representativeId);
-
+    
     if (!representativeId) {
       return res.status(400).json({ 
         error: 'شناسه نماینده نامعتبر است' 
@@ -21,7 +21,7 @@ router.post('/profile/:representativeId', authMiddleware, async (req, res) => {
     // Get representative data
     const representatives = await storage.getRepresentatives();
     const representative = representatives.find(rep => rep.id === representativeId);
-
+    
     if (!representative) {
       return res.status(404).json({ 
         error: 'نماینده یافت نشد' 
@@ -35,7 +35,7 @@ router.post('/profile/:representativeId', authMiddleware, async (req, res) => {
       culturalAdaptation: 'traditional',
       trustLevel: 'high'
     };
-
+    
     res.json({
       representativeId,
       profile,
@@ -58,7 +58,7 @@ router.post('/profile/:representativeId', authMiddleware, async (req, res) => {
 router.get('/insights/:representativeId', authMiddleware, async (req, res) => {
   try {
     const representativeId = parseInt(req.params.representativeId);
-
+    
     if (!representativeId) {
       return res.status(400).json({ 
         error: 'شناسه نماینده نامعتبر است' 
@@ -68,7 +68,7 @@ router.get('/insights/:representativeId', authMiddleware, async (req, res) => {
     // Get representative data
     const representatives = await storage.getRepresentatives();
     const representative = representatives.find(rep => rep.id === representativeId);
-
+    
     if (!representative) {
       return res.status(404).json({ 
         error: 'نماینده یافت نشد' 
@@ -81,7 +81,7 @@ router.get('/insights/:representativeId', authMiddleware, async (req, res) => {
       { type: 'cultural', title: 'تطبیق فرهنگی', description: 'سازگاری با فرهنگ ایرانی', confidence: 0.9 },
       { type: 'communication', title: 'روش ارتباط', description: 'ترجیح ارتباط مستقیم', confidence: 0.85 }
     ];
-
+    
     res.json({
       representativeId,
       insights,
@@ -103,7 +103,7 @@ router.get('/insights/:representativeId', authMiddleware, async (req, res) => {
 router.get('/analysis/:representativeId/level', authMiddleware, async (req, res) => {
   try {
     const representativeId = parseInt(req.params.representativeId);
-
+    
     if (!representativeId) {
       return res.status(400).json({ 
         error: 'شناسه نماینده نامعتبر است' 
@@ -117,7 +117,7 @@ router.get('/analysis/:representativeId/level', authMiddleware, async (req, res)
       recommendations: ['افزایش فعالیت فروش', 'بهبود ارتباط با مشتریان'],
       performanceScore: 75
     };
-
+    
     res.json({
       representativeId,
       analysis,

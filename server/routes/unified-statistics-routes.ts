@@ -6,7 +6,6 @@
 import { Router } from "express";
 import { unifiedStatisticsEngine } from "../services/unified-statistics-engine";
 
-
 const router = Router();
 
 // Authentication middleware
@@ -191,66 +190,6 @@ export function registerUnifiedStatisticsRoutes(app: any, requireAuth: any) {
 
   // Legacy compatibility routes  
   app.use("/api/dashboard", router);
-
-  // Reports endpoint with enhanced routing and response validation
-  app.get("/api/reports", requireAuth, async (req: any, res: any) => {
-    try {
-      console.log('🔍 SHERLOCK v1.0: Reports API endpoint called');
-
-      // Ensure proper content type
-      res.setHeader('Content-Type', 'application/json');
-
-      // Mock reports data since storage import is not available
-      const reports = [
-        { id: 1, name: "گزارش فروش ماهانه", date: "2023-12-31", type: "sales" },
-        { id: 2, name: "گزارش عملکرد نمایندگان", date: "2023-12-15", type: "performance" }
-      ];
-
-      console.log('✅ Reports data retrieved successfully:', reports.length);
-
-      res.json({
-        success: true,
-        data: reports,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error: any) {
-      console.error('❌ Reports API error:', error);
-      res.status(500).json({ 
-        success: false,
-        error: error.message || 'خطا در دریافت گزارشات',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
-
-  // Additional CRM Reports endpoint for CRM panel
-  app.get("/api/crm/reports", requireAuth, async (req: any, res: any) => {
-    try {
-      console.log('🔍 SHERLOCK v1.0: CRM Reports API endpoint called');
-
-      res.setHeader('Content-Type', 'application/json');
-
-      // Mock reports data for CRM panel
-      const reports = [
-        { id: 1, name: "گزارش فروش ماهانه", date: "2023-12-31", type: "sales" },
-        { id: 2, name: "گزارش عملکرد نمایندگان", date: "2023-12-15", type: "performance" }
-      ];
-
-      res.json({
-        success: true,
-        data: reports,
-        panelType: 'CRM',
-        timestamp: new Date().toISOString()
-      });
-    } catch (error: any) {
-      console.error('❌ CRM Reports API error:', error);
-      res.status(500).json({ 
-        success: false,
-        error: error.message || 'خطا در دریافت گزارشات CRM',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
 }
 
 export default router;

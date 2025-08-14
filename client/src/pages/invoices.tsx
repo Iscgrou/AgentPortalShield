@@ -82,9 +82,6 @@ export default function Invoices() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // SHERLOCK v12.1: Backend handles all filtering and pagination now
-  // SHERLOCK v12.2: Fetch total statistics for widgets (not just current page)
-  // Enhanced error handling and data validation for invoices
   const { data: invoicesResponse, isLoading, error } = useQuery({
     queryKey: ["/api/invoices/with-batch-info", { 
       page: currentPage, 
@@ -100,35 +97,23 @@ export default function Invoices() {
       if (statusFilter !== 'all') params.append('status', statusFilter);
       if (searchTerm) params.append('search', searchTerm);
       if (telegramFilter !== 'all') params.append('telegram', telegramFilter);
-
+      
       return apiRequest(`/api/invoices/with-batch-info?${params.toString()}`);
     },
     select: (data: any) => {
       console.log('SHERLOCK v12.1 DEBUG: Raw data from API:', data);
       // Handle both array response and paginated response
       if (Array.isArray(data)) {
-        return { data: data, pagination: { totalPages: 1, totalCount: data.length } };
+        return { data: data, pagination: null };
       }
-      if (data && data.data && Array.isArray(data.data)) {
-        return data;
-      }
-      console.warn('⚠️ Unexpected invoices data structure:', data);
-      return { data: [], pagination: { totalPages: 0, totalCount: 0 } };
+      return data;
     },
     retry: 3,
-    retryDelay: 1000,
-    onError: (err: any) => {
-      console.error("Error fetching invoices:", err);
-      toast({
-        title: "خطا در بارگذاری فاکتورها",
-        description: err?.message || "لطفا دوباره تلاش کنید",
-        variant: "destructive",
-      });
-    }
+    retryDelay: 1000
   });
 
   const invoices = invoicesResponse?.data || [];
-  const pagination = invoicesResponse?.pagination || { totalPages: 0, totalCount: 0 };
+  const pagination = invoicesResponse?.pagination;
 
   console.log('SHERLOCK v12.1 DEBUG: Final invoices count:', invoices?.length || 0);
   console.log('SHERLOCK v12.1 DEBUG: isLoading:', isLoading);
@@ -165,25 +150,29 @@ export default function Invoices() {
     }
   });
 
-  // Filtered and paginated invoices are now handled by the backend query
+  // SHERLOCK v12.1: Backend handles all filtering and pagination now
   const filteredInvoices = invoices || [];
   const paginatedInvoices = filteredInvoices;
 
   // Use backend pagination info
-  const totalPages = pagination?.totalPages || 1;
+  const totalPages = pagination?.totalPages || Math.ceil(filteredInvoices.length / pageSize);
   const totalCount = pagination?.totalCount || filteredInvoices.length;
 
-  // SHERLOCK v12.2: Use total statistics for widgets, not just current page  
+  // SHERLOCK v12.2: Fetch total statistics for widgets (not just current page)
   const { data: totalStats } = useQuery({
     queryKey: ["/api/invoices/statistics"],
-    enabled: true // Ensure this query runs
+    enabled: true
   });
 
-  // Reset to first page when filters change
+  // Reset to first page when filters change and invalidate cache
   useEffect(() => {
     setCurrentPage(1);
     setSelectedInvoices([]);
-  }, [searchTerm, statusFilter, telegramFilter]);
+    // Invalidate queries to force new data fetch with updated filters
+    queryClient.invalidateQueries({
+      queryKey: ["/api/invoices/with-batch-info"]
+    });
+  }, [searchTerm, statusFilter, telegramFilter, queryClient]);
 
   const handleSelectAll = () => {
     const currentPageInvoiceIds = paginatedInvoices.map((inv: Invoice) => inv.id);
@@ -251,15 +240,25 @@ export default function Invoices() {
   };
 
   // SHERLOCK v12.2: Use total statistics for widgets, not just current page  
-  const stats = {
-    total: totalStats?.totalInvoices || 0,
-    unpaid: totalStats?.unpaidCount || 0,
-    paid: totalStats?.paidCount || 0,
-    partial: totalStats?.partialCount || 0,
-    overdue: totalStats?.overdueCount || 0,
-    totalAmount: totalStats?.totalAmount || 0,
-    sentToTelegram: totalStats?.sentToTelegramCount || 0,
-    unsentToTelegram: totalStats?.unsentToTelegramCount || 0
+  const stats = totalStats ? {
+    total: totalStats.totalInvoices || 0,
+    unpaid: totalStats.unpaidCount || 0,
+    paid: totalStats.paidCount || 0,
+    partial: totalStats.partialCount || 0,
+    overdue: totalStats.overdueCount || 0,
+    totalAmount: totalStats.totalAmount || 0,
+    // SHERLOCK v12.2: Use total telegram stats from API
+    sentToTelegram: totalStats.sentToTelegramCount || 0,
+    unsentToTelegram: totalStats.unsentToTelegramCount || 0
+  } : {
+    total: filteredInvoices.length,
+    unpaid: filteredInvoices.filter((inv: Invoice) => inv.status === 'unpaid').length,
+    paid: filteredInvoices.filter((inv: Invoice) => inv.status === 'paid').length,
+    partial: filteredInvoices.filter((inv: Invoice) => inv.status === 'partial').length,
+    overdue: filteredInvoices.filter((inv: Invoice) => inv.status === 'overdue').length,
+    totalAmount: filteredInvoices.reduce((sum: number, inv: Invoice) => sum + parseFloat(inv.amount), 0),
+    sentToTelegram: filteredInvoices.filter((inv: Invoice) => inv.sentToTelegram).length,
+    unsentToTelegram: filteredInvoices.filter((inv: Invoice) => !inv.sentToTelegram).length
   };
 
 
@@ -311,23 +310,6 @@ export default function Invoices() {
     );
   }
 
-  // Handle potential error state after loading
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <AlertTriangle className="w-12 h-12 text-red-500" />
-        <h2 className="text-2xl font-semibold text-red-600">خطا در بارگذاری فاکتورها</h2>
-        <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">
-          متاسفانه در بارگذاری اطلاعات فاکتورها مشکلی رخ داده است. لطفا صفحه را رفرش کنید یا بعدا دوباره تلاش نمایید.
-        </p>
-        <Button onClick={() => window.location.reload()}>
-          رفرش صفحه
-        </Button>
-      </div>
-    );
-  }
-
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -359,7 +341,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">کل فاکتورها</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-                  {toPersianDigits((stats.total || 0).toString())}
+                  {toPersianDigits(stats.total.toString())}
                 </p>
               </div>
               <FileText className="w-8 h-8 text-gray-400" />
@@ -373,7 +355,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">پرداخت شده</p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">
-                  {toPersianDigits((stats.paid || 0).toString())}
+                  {toPersianDigits(stats.paid.toString())}
                 </p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-400" />
@@ -387,7 +369,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">پرداخت نشده</p>
                 <p className="text-2xl font-bold text-orange-600 dark:text-orange-400 mt-2">
-                  {toPersianDigits((stats.unpaid || 0).toString())}
+                  {toPersianDigits(stats.unpaid.toString())}
                 </p>
               </div>
               <Clock className="w-8 h-8 text-orange-400" />
@@ -401,7 +383,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">تسویه جزئی</p>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">
-                  {toPersianDigits((stats.partial || 0).toString())}
+                  {toPersianDigits(stats.partial.toString())}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-blue-400" />
@@ -415,7 +397,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">سررسید گذشته</p>
                 <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
-                  {toPersianDigits((stats.overdue || 0).toString())}
+                  {toPersianDigits(stats.overdue.toString())}
                 </p>
               </div>
               <AlertTriangle className="w-8 h-8 text-red-400" />
@@ -429,7 +411,7 @@ export default function Invoices() {
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">ارسال نشده</p>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">
-                  {toPersianDigits((stats.unsentToTelegram || 0).toString())}
+                  {toPersianDigits(stats.unsentToTelegram.toString())}
                 </p>
               </div>
               <Send className="w-8 h-8 text-blue-400" />

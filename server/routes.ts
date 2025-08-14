@@ -416,15 +416,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Representatives API - Protected
-  // Representatives
   app.get("/api/representatives", authMiddleware, async (req, res) => {
     try {
-      console.log('🔍 SHERLOCK v1.0: Fetching representatives with admin auth');
-      const reps = await storage.getRepresentatives();
-      console.log(`✅ SHERLOCK v1.0: Found ${reps.length} representatives`);
-      res.json(reps);
-    } catch (error: any) {
-      console.error('❌ SHERLOCK v1.0: Representatives fetch error:', error);
+      const representatives = await storage.getRepresentatives();
+      res.json(representatives);
+    } catch (error) {
       res.status(500).json({ error: "خطا در دریافت نمایندگان" });
     }
   });
@@ -456,44 +452,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/representatives/:id", authMiddleware, async (req, res) => {
+  app.get("/api/representatives/:code", authMiddleware, async (req, res) => {
     try {
-      const identifier = req.params.id;
-      console.log(`🔍 SHERLOCK v1.0: Fetching representative details for: ${identifier}`);
-
-      // Support both ID and code
-      let rep;
-      if (isNaN(parseInt(identifier))) {
-        // It's a code
-        rep = await storage.getRepresentativeByCode(identifier);
-      } else {
-        // It's an ID
-        rep = await storage.getRepresentative(parseInt(identifier));
-      }
-
-      if (!rep) {
+      const representative = await storage.getRepresentativeByCode(req.params.code);
+      if (!representative) {
         return res.status(404).json({ error: "نماینده یافت نشد" });
       }
 
-      // Get related invoices and payments
-      const invoices = await storage.getInvoicesForRepresentative(rep.id);
-      const payments = await storage.getPaymentsForRepresentative(rep.id);
-
-      console.log(`✅ SHERLOCK v1.0: Found representative with ${invoices.length} invoices, ${payments.length} payments`);
+      // Get related data
+      const invoices = await storage.getInvoicesByRepresentative(representative.id);
+      const payments = await storage.getPaymentsByRepresentative(representative.id);
 
       res.json({
-        ...rep,
+        representative,
         invoices,
-        payments,
-        summary: {
-          totalInvoices: invoices.length,
-          totalPayments: payments.length,
-          lastActivity: new Date().toISOString()
-        }
+        payments
       });
-    } catch (error: any) {
-      console.error('❌ SHERLOCK v1.0: Representative details error:', error);
-      res.status(500).json({ error: "خطا در دریافت جزئیات نماینده" });
+    } catch (error) {
+      res.status(500).json({ error: "خطا در دریافت اطلاعات نماینده" });
     }
   });
 
@@ -694,9 +670,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stats = await storage.getSalesPartnersStatistics();
       res.json(stats);
     } catch (error) {
-      res.status(500).json({
+      res.status(500).json({ 
         totalPartners: "0",
-        activePartners: "0",
+        activePartners: "0", 
         totalCommission: "0",
         averageCommissionRate: "0"
       });
