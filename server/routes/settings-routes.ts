@@ -119,7 +119,7 @@ function decryptApiKey(encryptedApiKey: string): string {
 
 export function registerSettingsRoutes(app: Express) {
   
-  // CRM Authentication Middleware - Enhanced Cross-Panel Support
+  // Enhanced Settings Authentication Middleware with Unified Session Management
   const crmAuthMiddleware = (req: any, res: any, next: any) => {
     // Check multiple session authentication methods
     const isCrmAuthenticated = req.session?.crmAuthenticated === true || req.session?.crmUser;
@@ -127,19 +127,38 @@ export function registerSettingsRoutes(app: Express) {
                                 (req.session?.role === 'admin' || req.session?.role === 'ADMIN' || req.session?.role === 'SUPER_ADMIN');
     const isAuthenticated = isCrmAuthenticated || isAdminAuthenticated;
     
+    // Determine user context for logging
+    const userContext = isCrmAuthenticated ? 'CRM_USER' : isAdminAuthenticated ? 'ADMIN_USER' : 'UNAUTHENTICATED';
+    const userId = req.session?.crmUser?.id || req.session?.userId || 'unknown';
+    
     console.log('🔧 Settings Auth Check:', {
       sessionId: req.sessionID,
-      crmAuthenticated: req.session?.crmAuthenticated,
-      crmUser: !!req.session?.crmUser,
-      adminAuthenticated: req.session?.authenticated,
-      adminRole: req.session?.role,
-      finalAuth: isAuthenticated
+      userContext,
+      userId,
+      authenticated: isAuthenticated,
+      endpoint: req.path,
+      method: req.method
     });
     
     if (isAuthenticated) {
+      // Touch session and update activity
+      req.session.touch();
+      if (req.session.crmUser) {
+        req.session.crmUser.lastActivity = new Date().toISOString();
+      }
       next();
     } else {
-      res.status(401).json({ error: 'احراز هویت نشده - دسترسی غیرمجاز' });
+      console.log('❌ Settings Auth Failed:', {
+        sessionId: req.sessionID,
+        userContext,
+        endpoint: req.path,
+        timestamp: new Date().toISOString()
+      });
+      res.status(401).json({ 
+        error: 'احراز هویت نشده - دسترسی غیرمجاز',
+        context: 'SETTINGS_ACCESS',
+        timestamp: new Date().toISOString()
+      });
     }
   };
 

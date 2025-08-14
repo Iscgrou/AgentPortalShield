@@ -35,7 +35,7 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
     }
   });
   
-  // CRM Authentication Middleware - Enhanced Cross-Panel Support
+  // CRM Authentication Middleware - Enhanced Cross-Panel Support with Session Recovery
   const crmAuthMiddleware = (req: any, res: any, next: any) => {
     // Check multiple session authentication methods
     const isCrmAuthenticated = req.session?.crmAuthenticated === true || req.session?.crmUser;
@@ -43,12 +43,28 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
                                 (req.session?.role === 'admin' || req.session?.role === 'ADMIN' || req.session?.role === 'SUPER_ADMIN');
     const isAuthenticated = isCrmAuthenticated || isAdminAuthenticated;
     
-    // Debug logging removed - authentication working correctly
+    // Enhanced debug logging for production monitoring
+    if (!isAuthenticated) {
+      console.log('🔒 CRM Auth Failed:', {
+        sessionId: req.sessionID,
+        hasSession: !!req.session,
+        crmAuth: req.session?.crmAuthenticated,
+        adminAuth: req.session?.authenticated,
+        userAgent: req.get('User-Agent')?.slice(0, 50),
+        ip: req.ip
+      });
+    }
     
     if (isAuthenticated) {
+      // Touch session to extend expiry
+      req.session.touch();
       next();
     } else {
-      res.status(401).json({ error: 'احراز هویت نشده - دسترسی غیرمجاز' });
+      res.status(401).json({ 
+        error: 'احراز هویت نشده - دسترسی غیرمجاز',
+        timestamp: new Date().toISOString(),
+        sessionId: req.sessionID 
+      });
     }
   };
 
@@ -374,7 +390,7 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
 
       await db.update(crmUsers).set({ lastLoginAt: new Date() }).where(eq(crmUsers.id, user.id));
 
-      // Enhanced session management with proper persistence
+      // Enhanced session management with proper persistence and security
       req.session.crmAuthenticated = true;
       req.session.crmUser = {
         id: user.id,
@@ -382,29 +398,51 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
         fullName: user.fullName || '',
         role: user.role || '',
         permissions: user.permissions as string[] || [],
-        panelType: 'CRM_PANEL'
+        panelType: 'CRM_PANEL',
+        loginTime: new Date().toISOString(),
+        lastActivity: new Date().toISOString()
       };
 
-      // Force session save to ensure persistence
+      // Set session security options
+      req.session.cookie.secure = process.env.NODE_ENV === 'production';
+      req.session.cookie.httpOnly = true;
+      req.session.cookie.maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+      // Force session save with enhanced error handling
       req.session.save((err) => {
         if (err) {
-          console.error('Session save error:', err);
-          return res.status(500).json({ error: "خطا در ذخیره جلسه" });
+          console.error('💥 CRM Session save error:', err);
+          return res.status(500).json({ 
+            error: "خطا در ذخیره جلسه",
+            details: process.env.NODE_ENV === 'development' ? err.message : undefined
+          });
         }
         
         console.log('✅ CRM Session saved successfully:', {
           sessionId: req.sessionID,
-          user: req.session.crmUser,
-          authenticated: req.session.crmAuthenticated
+          userId: user.id,
+          username: user.username,
+          authenticated: req.session.crmAuthenticated,
+          cookieSettings: {
+            secure: req.session.cookie.secure,
+            httpOnly: req.session.cookie.httpOnly,
+            maxAge: req.session.cookie.maxAge
+          }
         });
         
         res.json({
           success: true,
           message: "ورود موفقیت‌آمیز به سیستم CRM",
-          user: req.session.crmUser,
-          sessionId: req.sessionID,
-          debugInfo: {
-            sessionSaved: true,
+          user: {
+            id: user.id,
+            username: user.username,
+            fullName: user.fullName || '',
+            role: user.role || '',
+            panelType: 'CRM_PANEL'
+          },
+          sessionInfo: {
+            sessionId: req.sessionID,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             timestamp: new Date().toISOString()
           }
         });
@@ -416,20 +454,42 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
   });
 
   app.get("/api/crm/auth/user", (req, res) => {
-    console.log('🔍 CRM Auth Check - Session Data:', {
+    const sessionValid = req.session?.crmAuthenticated && req.session?.crmUser;
+    
+    console.log('🔍 CRM Auth Check:', {
       sessionId: req.sessionID,
-      crmAuthenticated: req.session?.crmAuthenticated,
-      crmUser: req.session?.crmUser,
+      authenticated: !!sessionValid,
+      userId: req.session?.crmUser?.id,
+      username: req.session?.crmUser?.username,
       hasSession: !!req.session,
-      sessionObject: req.session
+      userAgent: req.get('User-Agent')?.slice(0, 50)
     });
     
-    if (req.session?.crmAuthenticated && req.session?.crmUser) {
-      console.log('✅ CRM Auth Success - Returning user:', req.session.crmUser);
-      res.json(req.session.crmUser);
+    if (sessionValid) {
+      // Update last activity timestamp
+      if (req.session.crmUser) {
+        req.session.crmUser.lastActivity = new Date().toISOString();
+        req.session.touch(); // Extend session expiry
+      }
+      
+      console.log('✅ CRM Auth Success - User active:', {
+        id: req.session.crmUser.id,
+        username: req.session.crmUser.username,
+        lastActivity: req.session.crmUser.lastActivity
+      });
+      
+      res.json({
+        ...req.session.crmUser,
+        sessionStatus: 'active',
+        sessionExpiry: new Date(Date.now() + (req.session.cookie.maxAge || 24 * 60 * 60 * 1000)).toISOString()
+      });
     } else {
       console.log('❌ CRM Auth Failed - Session invalid or expired');
-      res.status(401).json({ error: "احراز هویت نشده" });
+      res.status(401).json({ 
+        error: "احراز هویت نشده",
+        sessionId: req.sessionID,
+        timestamp: new Date().toISOString()
+      });
     }
   });
 
@@ -437,6 +497,55 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
   app.post("/api/crm/payments", crmAuthMiddleware, async (req, res) => {
     try {
       const validatedData = insertPaymentSchema.parse(req.body);
+
+
+  // Session Monitoring Endpoint for CRM Administrators
+  app.get("/api/crm/auth/session-info", crmAuthMiddleware, (req, res) => {
+    try {
+      const sessionInfo = {
+        sessionId: req.sessionID,
+        user: req.session?.crmUser || req.session?.user,
+        authenticated: {
+          crm: req.session?.crmAuthenticated || false,
+          admin: req.session?.authenticated || false
+        },
+        cookie: {
+          secure: req.session?.cookie.secure,
+          httpOnly: req.session?.cookie.httpOnly,
+          maxAge: req.session?.cookie.maxAge,
+          expires: req.session?.cookie.expires
+        },
+        timing: {
+          created: req.session?.cookie.originalMaxAge ? 
+            new Date(Date.now() - (req.session.cookie.originalMaxAge - (req.session.cookie.maxAge || 0))).toISOString() : 
+            'unknown',
+          expires: req.session?.cookie.maxAge ? 
+            new Date(Date.now() + req.session.cookie.maxAge).toISOString() : 
+            'session'
+        },
+        activity: {
+          lastActivity: req.session?.crmUser?.lastActivity || req.session?.lastActivity || 'unknown',
+          requestCount: req.session?.requestCount || 0
+        }
+      };
+
+      // Increment request counter
+      req.session.requestCount = (req.session.requestCount || 0) + 1;
+
+      res.json({
+        success: true,
+        sessionInfo,
+        serverTime: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Session info error:', error);
+      res.status(500).json({ 
+        error: 'خطا در دریافت اطلاعات جلسه',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
       const payment = await storage.createPayment(validatedData);
       
       // Auto-allocate to oldest unpaid invoice if representativeId provided
