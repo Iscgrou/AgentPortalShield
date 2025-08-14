@@ -57,14 +57,25 @@ export interface GlobalFinancialSummary {
 }
 
 export class UnifiedFinancialEngine {
-  // Static cache for performance optimization
+  // Enhanced multi-level cache system
   private static cache = new Map<string, { data: any; timestamp: number }>();
   private static readonly CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+  private static readonly QUERY_CACHE_TTL = 30 * 1000; // 30 seconds for query results
+  private static queryCache = new Map<string, { data: any; timestamp: number }>();
 
   /**
-   * Real-time calculation for single representative
+   * Real-time calculation for single representative - CACHED v18.8
    */
   async calculateRepresentative(representativeId: number): Promise<UnifiedFinancialData> {
+    // Check cache first
+    const cacheKey = `rep_calc_${representativeId}`;
+    const cached = UnifiedFinancialEngine.queryCache.get(cacheKey);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp) < UnifiedFinancialEngine.QUERY_CACHE_TTL) {
+      return cached.data;
+    }
+
     // Get representative data
     const rep = await db.select({
       id: representatives.id,
@@ -113,7 +124,7 @@ export class UnifiedFinancialEngine {
     else if (actualDebt <= 500000) debtLevel = 'HIGH';
     else debtLevel = 'CRITICAL';
 
-    return {
+    const result = {
       representativeId,
       representativeName: rep[0].name,
       representativeCode: rep[0].code,
@@ -133,6 +144,14 @@ export class UnifiedFinancialEngine {
       calculationTimestamp: new Date().toISOString(),
       accuracyGuaranteed: true
     };
+
+    // Cache the result
+    UnifiedFinancialEngine.queryCache.set(cacheKey, {
+      data: result,
+      timestamp: now
+    });
+
+    return result;
   }
 
   /**

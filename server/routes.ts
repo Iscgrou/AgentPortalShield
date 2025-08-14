@@ -47,6 +47,9 @@ import { registerUnifiedStatisticsRoutes } from "./routes/unified-statistics-rou
 // Register unified financial routes  
 import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-routes.js";
 
+// Import database optimization routes registration
+import databaseOptimizationRoutes from './routes/database-optimization-routes.js';
+
 
 // Configure multer for file uploads with broader JSON acceptance
 const upload = multer({
@@ -114,6 +117,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
   // app.use("/api/unified-statistics", unifiedStatisticsRoutes);
   registerUnifiedStatisticsRoutes(app, requireAuth);
+
+  // Register database optimization routes
+  app.use('/api/database-optimization', databaseOptimizationRoutes.default);
 
 
   // xAI Grok Configuration API
