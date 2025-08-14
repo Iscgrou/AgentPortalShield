@@ -1,5 +1,12 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// Define the interface for API request options
+interface ApiRequestOptions {
+  method?: string;
+  headers?: Record<string, string>;
+  data?: any;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;

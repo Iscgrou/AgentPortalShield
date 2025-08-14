@@ -1,8 +1,10 @@
+import React from 'react';
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, TrendingDown } from "lucide-react";
 import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
+import { apiRequest } from "@/lib/queryClient";
 
 interface DebtorRepresentative {
   id: number;
