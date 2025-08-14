@@ -25,10 +25,6 @@ import {
   Award,
   Calendar
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { 
   Table, 
   TableBody, 
@@ -53,8 +49,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SalesPartnerWithCount } from "@shared/schema";
