@@ -15,7 +15,7 @@ interface DebtorRepresentative {
 
 function DebtorRepresentativeRow({ representative }: { representative: DebtorRepresentative }) {
   const remainingDebt = parseFloat(representative.remainingDebt) || 0;
-  
+
   return (
     <div className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
       <div className="flex items-center space-x-3 rtl:space-x-reverse flex-1">
@@ -51,8 +51,16 @@ function DebtorRepresentativeRow({ representative }: { representative: DebtorRep
 }
 
 export default function DebtorRepresentativesCard() {
-  const { data: debtorReps, isLoading } = useQuery<DebtorRepresentative[]>({
-    queryKey: ["/api/dashboard/debtor-representatives"]
+  const { data: debtorReps, isLoading, error } = useQuery<DebtorRepresentative[]>({
+    queryKey: ["/api/dashboard/debtor-representatives"],
+    queryFn: async () => {
+      console.log('SHERLOCK v18.4: Fetching URL:', '/api/unified-financial/debtors');
+      const response = await fetch('/api/unified-financial/debtors');
+      if (!response.ok) throw new Error('Failed to fetch debtor representatives');
+      const result = await response.json();
+      return result.success ? result.data : result;
+    },
+    refetchInterval: 30000
   });
 
   if (isLoading) {

@@ -9,10 +9,17 @@ import { unifiedFinancialEngine } from '../services/unified-financial-engine.js'
 
 const router = Router();
 
-// Add basic authentication middleware - simple approach for testing
+// Authentication middleware consistent with main system
 const requireAuth = (req: any, res: any, next: any) => {
-  // For now, allow access for testing
-  next();
+  const isAdminAuthenticated = req.session?.authenticated === true && 
+                              req.session?.user?.role === 'admin';
+  const isCrmAuthenticated = req.session?.crmAuthenticated === true;
+
+  if (isAdminAuthenticated || isCrmAuthenticated) {
+    next();
+  } else {
+    res.status(401).json({ error: "احراز هویت نشده" });
+  }
 };
 
 /**
@@ -45,7 +52,7 @@ router.get('/global', requireAuth, async (req, res) => {
  * آمار مالی یک نماینده
  * جایگزین endpoints تکراری
  */
-router.get('/representative/:id', async (req, res) => {
+router.get('/representative/:id', requireAuth, async (req, res) => {
   try {
     const representativeId = parseInt(req.params.id);
     const data = await unifiedFinancialEngine.calculateRepresentative(representativeId);
@@ -71,7 +78,7 @@ router.get('/representative/:id', async (req, res) => {
  * لیست بدهکاران
  * جایگزین /api/dashboard/debtor-representatives
  */
-router.get('/debtors', async (req, res) => {
+router.get('/debtors', requireAuth, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 50;
     const debtors = await unifiedFinancialEngine.getDebtorRepresentatives(limit);
@@ -98,7 +105,7 @@ router.get('/debtors', async (req, res) => {
  * آمار تمام نمایندگان
  * جایگزین /api/representatives و سایر endpoints
  */
-router.get('/all-representatives', async (req, res) => {
+router.get('/all-representatives', requireAuth, async (req, res) => {
   try {
     const allData = await unifiedFinancialEngine.calculateAllRepresentatives();
     
@@ -116,6 +123,29 @@ router.get('/all-representatives', async (req, res) => {
     res.status(500).json({
       success: false,
       error: "خطا در دریافت اطلاعات نمایندگان"
+    });
+  }
+});
+
+/**
+ * تست authentication
+ */
+router.get('/auth-test', requireAuth, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: "احراز هویت موفق",
+      user: {
+        authenticated: true,
+        session: !!req.session,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Auth test error:', error);
+    res.status(500).json({
+      success: false,
+      error: "خطا در تست احراز هویت"
     });
   }
 });

@@ -240,16 +240,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // SHERLOCK v10.0 NEW ENDPOINT: Debtor Representatives API - Protected  
-  app.get("/api/dashboard/debtor-representatives", requireAuth, async (req, res) => {
-    try {
-      const debtorReps = await storage.getDebtorRepresentatives();
-      res.json(debtorReps);
-    } catch (error) {
-      console.error("Error fetching debtor representatives:", error);
-      res.status(500).json({ error: "خطا در دریافت نمایندگان بدهکار" });
-    }
-  });
+  // SHERLOCK v18.4: Debtor Representatives moved to unified financial routes
+  // Available at: /api/unified-financial/debtors
 
   // Real-time Data Synchronization API - SHERLOCK v1.0 Core Feature
   app.get("/api/sync/status", requireAuth, async (req, res) => {
