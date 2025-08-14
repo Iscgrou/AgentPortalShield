@@ -404,30 +404,6 @@ export default function Representatives() {
     setIsPaymentDeleteConfirmOpen(true);
   };
 
-  // ✅ SHERLOCK v23.0: همگام‌سازی صحیح بدهی نماینده
-  const syncRepresentativeDebtMutation = useMutation({
-    mutationFn: async (representativeId: number) => {
-      return apiRequest(`/api/unified-financial/sync-representative/${representativeId}`, {
-        method: "POST"
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["representatives"] });
-      queryClient.invalidateQueries({ queryKey: ["unified-financial", "debtors"] });
-      toast({
-        title: "موفق",
-        description: "بدهی نماینده همگام‌سازی شد"
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "خطا",
-        description: "خطا در همگام‌سازی بدهی نماینده",
-        variant: "destructive"
-      });
-    }
-  });
-
   // ✅ SHERLOCK v23.1: Automatic debt sync after payment
   const handleAutomaticDebtSync = async (representativeId: number) => {
     try {
@@ -1376,7 +1352,7 @@ export default function Representatives() {
                   {deletePaymentMutation.isPending ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2" />
-                      در حال حذف و همگام‌سازی...
+                      در حال حذف نهایی...
                     </>
                   ) : (
                     <>
@@ -1930,7 +1906,7 @@ function EditInvoiceDialog({
   };
 
   const [usageItems, setUsageItems] = useState<any[]>(parseUsageData(invoice.usageData));
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingEditInvoice, setIsLoadingEditInvoice] = useState(false);
 
   const updateUsageField = (field: string, value: string) => {
     const newData = { ...parsedUsageData, [field]: value };
@@ -2045,7 +2021,7 @@ function EditInvoiceDialog({
 
   const handleSave = async () => {
     try {
-      setIsLoading(true);
+      setIsLoadingEditInvoice(true);
 
       if (!amount || !issueDate) {
         toast({
@@ -2100,7 +2076,7 @@ function EditInvoiceDialog({
         variant: "destructive"
       });
     } finally {
-      setIsLoading(false);
+      setIsLoadingEditInvoice(false);
     }
   };
 
@@ -2287,17 +2263,17 @@ function EditInvoiceDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={isLoading}
+            disabled={isLoadingEditInvoice}
             className="ml-2 bg-white/10 border-white/20 text-white hover:bg-white/20"
           >
             انصراف
           </Button>
           <Button 
             onClick={handleSave} 
-            disabled={isLoading}
+            disabled={isLoadingEditInvoice}
             className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
           >
-            {isLoading ? "در حال ذخیره..." : "ذخیره تغییرات"}
+            {isLoadingEditInvoice ? "در حال ذخیره..." : "ذخیره تغییرات"}
           </Button>
         </div>
       </DialogContent>
