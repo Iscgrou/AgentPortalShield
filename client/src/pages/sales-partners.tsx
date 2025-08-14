@@ -90,6 +90,7 @@ export default function SalesPartners() {
 
   const { data: salesPartners = [], isLoading } = useQuery<SalesPartner[]>({
     queryKey: ["/api/sales-partners"],
+    queryFn: () => apiRequest("/api/sales-partners"),
     select: (data: any) => {
       if (Array.isArray(data)) return data;
       if (data && Array.isArray(data.data)) return data.data;
@@ -99,6 +100,7 @@ export default function SalesPartners() {
 
   const { data: stats } = useQuery<SalesPartnerStats>({
     queryKey: ["/api/sales-partners/statistics"],
+    queryFn: () => apiRequest("/api/sales-partners/statistics"),
     select: (data: any) => {
       return data || {
         totalPartners: "0",

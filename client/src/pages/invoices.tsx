@@ -74,11 +74,11 @@ export default function Invoices() {
   const [telegramFilter, setTelegramFilter] = useState<string>("all");
   const [selectedInvoices, setSelectedInvoices] = useState<number[]>([]);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(30);
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -102,7 +102,7 @@ export default function Invoices() {
 
   const invoices = invoicesResponse?.data || [];
   const pagination = invoicesResponse?.pagination;
-  
+
   console.log('SHERLOCK v12.1 DEBUG: Final invoices count:', invoices?.length || 0);
   console.log('SHERLOCK v12.1 DEBUG: isLoading:', isLoading);
   console.log('SHERLOCK v12.1 DEBUG: error:', error);
@@ -141,11 +141,11 @@ export default function Invoices() {
   // SHERLOCK v12.1: Backend handles all filtering and pagination now
   const filteredInvoices = invoices || [];
   const paginatedInvoices = filteredInvoices;
-  
+
   // Use backend pagination info
   const totalPages = pagination?.totalPages || Math.ceil(filteredInvoices.length / pageSize);
   const totalCount = pagination?.totalCount || filteredInvoices.length;
-  
+
   // SHERLOCK v12.2: Fetch total statistics for widgets (not just current page)
   const { data: totalStats } = useQuery({
     queryKey: ["/api/invoices/statistics"],
@@ -164,7 +164,7 @@ export default function Invoices() {
 
   const handleSelectAll = () => {
     const currentPageInvoiceIds = paginatedInvoices.map((inv: Invoice) => inv.id);
-      
+
     if (currentPageInvoiceIds.every((id: number) => selectedInvoices.includes(id))) {
       setSelectedInvoices(prev => prev.filter((id: number) => !currentPageInvoiceIds.includes(id)));
     } else {
@@ -200,7 +200,7 @@ export default function Invoices() {
     const unsentInvoices = filteredInvoices
       .filter((inv: Invoice) => !inv.sentToTelegram)
       .map((inv: Invoice) => inv.id);
-    
+
     if (unsentInvoices.length > 0) {
       sendToTelegramMutation.mutate(unsentInvoices);
       setSelectedInvoices([]);
@@ -263,7 +263,7 @@ export default function Invoices() {
             <Skeleton className="h-4 w-64" />
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
@@ -275,7 +275,7 @@ export default function Invoices() {
             </Card>
           ))}
         </div>
-        
+
         <Card>
           <CardHeader>
             <Skeleton className="h-6 w-32" />
@@ -308,7 +308,7 @@ export default function Invoices() {
             مدیریت فاکتورها (نمایش: جدیدترین ابتدا، پرداخت: FIFO) و ارسال به تلگرام
           </p>
         </div>
-        
+
         <div className="flex items-center space-x-4 space-x-reverse">
           <Button 
             onClick={handleSendToTelegram}
@@ -424,7 +424,7 @@ export default function Invoices() {
                 className="pr-10"
               />
             </div>
-            
+
             <Select value={statusFilter} onValueChange={(value) => {
               setStatusFilter(value);
               setCurrentPage(1);
@@ -479,7 +479,7 @@ export default function Invoices() {
                   انتخاب همه ({toPersianDigits(paginatedInvoices.length.toString())})
                 </span>
               </div>
-              
+
               {selectedInvoices.length > 0 && (
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <Button
@@ -491,7 +491,7 @@ export default function Invoices() {
                     <Send className="w-4 h-4 ml-1" />
                     ارسال {toPersianDigits(selectedInvoices.length.toString())} فاکتور به تلگرام
                   </Button>
-                  
+
                   <Button
                     size="sm"
                     variant="outline"
@@ -542,11 +542,11 @@ export default function Invoices() {
                       }
                     />
                   </TableCell>
-                  
+
                   <TableCell className="font-medium">
                     {invoice.invoiceNumber}
                   </TableCell>
-                  
+
                   <TableCell>
                     <div>
                       <div className="font-medium text-gray-900 dark:text-white">
@@ -562,18 +562,18 @@ export default function Invoices() {
                       )}
                     </div>
                   </TableCell>
-                  
+
                   <TableCell className="font-medium">
                     {formatCurrency(invoice.amount)} تومان
                   </TableCell>
-                  
+
                   <TableCell>
                     <div className="flex items-center text-sm">
                       <Calendar className="w-4 h-4 ml-1 text-gray-400" />
                       {invoice.issueDate}
                     </div>
                   </TableCell>
-                  
+
                   <TableCell>
                     {invoice.dueDate ? (
                       <div className={`text-sm ${
@@ -587,11 +587,11 @@ export default function Invoices() {
                       "-"
                     )}
                   </TableCell>
-                  
+
                   <TableCell>
                     {getInvoiceStatusBadge(invoice)}
                   </TableCell>
-                  
+
                   <TableCell>
                     <div className="flex flex-col space-y-1">
                       <Badge variant={invoice.sentToTelegram ? "default" : "secondary"}>
@@ -607,13 +607,13 @@ export default function Invoices() {
                       )}
                     </div>
                   </TableCell>
-                  
+
                   <TableCell>
                     <div className="flex items-center space-x-2 space-x-reverse">
                       <Button size="sm" variant="ghost">
                         <Eye className="w-4 h-4" />
                       </Button>
-                      
+
                       <Button
                         size="sm"
                         variant={invoice.sentToTelegram ? "secondary" : "outline"}
@@ -627,7 +627,7 @@ export default function Invoices() {
                         <Send className="w-4 h-4 ml-1" />
                         {invoice.sentToTelegram ? "ارسال مجدد" : "ارسال"}
                       </Button>
-                      
+
                       <Button size="sm" variant="ghost">
                         <Download className="w-4 h-4" />
                       </Button>
@@ -638,7 +638,7 @@ export default function Invoices() {
               )}
             </TableBody>
           </Table>
-          
+
           {/* Pagination Controls with Statistics */}
           {totalPages > 1 && (
             <div className="mt-6 pt-4 border-t bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
@@ -650,7 +650,7 @@ export default function Invoices() {
                   صفحه {toPersianDigits(currentPage.toString())} از {toPersianDigits(totalPages.toString())}
                 </div>
               </div>
-              
+
               <div className="flex justify-center items-center gap-2 px-4 pb-4">
                 <Button
                   variant="outline"
@@ -661,7 +661,7 @@ export default function Invoices() {
                 >
                   <ChevronsRight className="w-4 h-4" />
                 </Button>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -672,7 +672,7 @@ export default function Invoices() {
                   <ChevronRight className="w-4 h-4 ml-1" />
                   قبلی
                 </Button>
-                
+
                 <div className="flex gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let page;
@@ -685,7 +685,7 @@ export default function Invoices() {
                     } else {
                       page = currentPage - 2 + i;
                     }
-                    
+
                     return (
                       <Button
                         key={page}
@@ -699,7 +699,7 @@ export default function Invoices() {
                     );
                   })}
                 </div>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -710,7 +710,7 @@ export default function Invoices() {
                   بعدی
                   <ChevronLeft className="w-4 h-4 mr-1" />
                 </Button>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -737,7 +737,7 @@ export default function Invoices() {
               const selectedInvoiceData = filteredInvoices.filter((inv: Invoice) => selectedInvoices.includes(inv.id));
               const newSends = selectedInvoiceData.filter((inv: Invoice) => !inv.sentToTelegram);
               const resends = selectedInvoiceData.filter((inv: Invoice) => inv.sentToTelegram);
-              
+
               return (
                 <>
                   <div className="text-gray-600 dark:text-gray-400">
@@ -755,7 +755,7 @@ export default function Invoices() {
                       </p>
                     )}
                   </div>
-                  
+
                   {newSends.length > 0 && (
                     <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
                       <h4 className="font-medium text-green-900 dark:text-green-200 mb-2">
@@ -770,7 +770,7 @@ export default function Invoices() {
                       </div>
                     </div>
                   )}
-                  
+
                   {resends.length > 0 && (
                     <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
                       <h4 className="font-medium text-orange-900 dark:text-orange-200 mb-2">
@@ -788,7 +788,7 @@ export default function Invoices() {
                 </>
               );
             })()}
-            
+
             <div className="flex justify-end space-x-2 space-x-reverse">
               <Button 
                 variant="outline" 

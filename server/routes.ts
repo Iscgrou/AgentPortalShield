@@ -670,7 +670,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stats = await storage.getSalesPartnersStatistics();
       res.json(stats);
     } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت آمار همکاران فروش" });
+      res.status(500).json({ 
+        totalPartners: "0",
+        activePartners: "0", 
+        totalCommission: "0",
+        averageCommissionRate: "0"
+      });
     }
   });
 
@@ -1941,7 +1946,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // xAI Grok Assistant API
-  // 🗑️ SHERLOCK v18.2: LEGACY AI TEST REMOVED - Use /api/settings/xai-grok/test instead
+  // 🗑️ SHERLOCK v18.2: LEGACY REMOVED - Use /api/settings/xai-grok/test instead
 
   app.post("/api/ai/analyze-financial", authMiddleware, async (req, res) => {
     try {

@@ -169,6 +169,7 @@ export default function Representatives() {
 
   const { data: representatives = [], isLoading } = useQuery<Representative[]>({
     queryKey: ["/api/representatives"],
+    queryFn: () => apiRequest("/api/representatives"),
     select: (data: any) => {
       if (Array.isArray(data)) return data;
       if (data && Array.isArray(data.data)) return data.data;
@@ -563,6 +564,7 @@ export default function Representatives() {
                   >
                     بدهی {getSortIcon('totalDebt')}
                   </TableHead>
+                  <TableHead>همکار فروش</TableHead>
                   <TableHead>عملیات</TableHead>
                 </TableRow>
               </TableHeader>
@@ -591,6 +593,11 @@ export default function Representatives() {
                       <span className={parseFloat(rep.totalDebt) > 1000000 ? "text-red-600 dark:text-red-400 font-semibold" : parseFloat(rep.totalDebt) > 500000 ? "text-orange-600 dark:text-orange-400 font-semibold" : ""}>
                         {formatCurrency(parseFloat(rep.totalDebt))}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {rep.salesPartnerId ? `شریک #${rep.salesPartnerId}` : 'پیش‌فرض'}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
@@ -1302,6 +1309,27 @@ function CreateRepresentativeDialog({
                   <FormLabel>آی‌دی تلگرام</FormLabel>
                   <FormControl>
                     <Input placeholder="@username" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="salesPartnerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>همکار فروش</FormLabel>
+                  <FormControl>
+                    <Select value={field.value?.toString()} onValueChange={(value) => field.onChange(parseInt(value))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="انتخاب همکار فروش" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">همکار پیش‌فرض</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
