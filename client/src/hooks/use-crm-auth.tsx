@@ -1,11 +1,15 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
 interface CrmUser {
+  id: number;
   username: string;
+  fullName: string;
   role: string;
-  sessionId: string;
+  panelType: string;
+  sessionId?: string;
 }
 
 interface CrmAuthContextType {
@@ -24,19 +28,25 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
+  const checkingAuth = useRef(false);
 
-  // Stable auth check function
-  const checkAuth = async () => {
-    if (authChecked) return; // Prevent multiple checks
+  const checkAuth = useCallback(async () => {
+    if (authChecked || checkingAuth.current) {
+      console.log('🔒 CRM Auth: Skipping duplicate check');
+      return;
+    }
+
+    checkingAuth.current = true;
 
     try {
       setIsLoading(true);
       const response = await apiRequest('/api/crm/auth/user');
 
-      if (response && response.user) {
-        setUser(response.user);
+      if (response && (response.id || response.user)) {
+        const userData = response.user || response;
+        setUser(userData);
         setIsAuthenticated(true);
-        console.log('✅ CRM Auth Success:', response.user);
+        console.log('✅ CRM Auth Success:', userData.username);
       } else {
         setUser(null);
         setIsAuthenticated(false);
@@ -49,8 +59,9 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
       setAuthChecked(true);
+      checkingAuth.current = false;
     }
-  };
+  }, [authChecked]);
 
   // Login mutation
   const loginMutation = useMutation({
@@ -90,12 +101,13 @@ export function CrmAuthProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  // Single auth check on mount
+  // Single auth check on mount only
   useEffect(() => {
-    if (!authChecked) {
+    if (!authChecked && !checkingAuth.current) {
+      console.log('🔍 CRM Auth: Initial check');
       checkAuth();
     }
-  }, [authChecked]);
+  }, []); // Empty dependency array - run only once
 
   return (
     <CrmAuthContext.Provider

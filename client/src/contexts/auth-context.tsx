@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -18,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
+  const checkingAuth = useRef(false);
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
@@ -36,8 +37,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const checkAuth = async () => {
-    if (authChecked) return; // Prevent multiple checks
+  const checkAuth = useCallback(async () => {
+    if (authChecked || checkingAuth.current) {
+      console.log('🔒 Admin Auth: Skipping duplicate check');
+      return;
+    }
+    
+    checkingAuth.current = true;
     
     try {
       setIsLoading(true);
@@ -56,15 +62,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
       setAuthChecked(true);
+      checkingAuth.current = false;
     }
-  };
+  }, [authChecked]);
 
-  const login = () => {
+  const login = useCallback(() => {
     setIsAuthenticated(true);
     setAuthChecked(true);
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     } catch (error) {
@@ -73,14 +80,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(false);
       setAuthChecked(false);
     }
-  };
+  }, []);
 
-  // Single auth check on mount
+  // Single auth check on mount only
   useEffect(() => {
-    if (!authChecked) {
+    if (!authChecked && !checkingAuth.current) {
+      console.log('🔍 Admin Auth: Initial check');
       checkAuth();
     }
-  }, [authChecked]);
+  }, []); // Empty dependency array - run only once
 
   return (
     <AuthContext.Provider
