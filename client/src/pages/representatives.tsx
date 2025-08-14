@@ -55,6 +55,36 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
 import { FinancialIntegrityCard } from "@/components/financial-integrity-card";
+
+// ✅ SHERLOCK v23.0: کامپوننت Real-time نمایش بدهی
+function RealTimeDebtCell({ representativeId }: { representativeId: number }) {
+  const { data: financialData, isLoading } = useQuery({
+    queryKey: [`/api/unified-financial/representative/${representativeId}`],
+    queryFn: () => apiRequest(`/api/unified-financial/representative/${representativeId}`),
+    select: (response: any) => response.data || response,
+    staleTime: 30000, // 30 seconds cache
+    retry: 1
+  });
+
+  if (isLoading) {
+    return <div className="animate-pulse bg-gray-200 h-4 w-16 rounded"></div>;
+  }
+
+  if (!financialData) {
+    return <span className="text-gray-400">-</span>;
+  }
+
+  const debt = financialData.actualDebt || 0;
+  
+  return (
+    <span className={
+      debt > 1000000 ? "text-red-600 dark:text-red-400 font-semibold" : 
+      debt > 500000 ? "text-orange-600 dark:text-orange-400 font-semibold" : ""
+    }>
+      {formatCurrency(debt)}
+    </span>
+  );
+}
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -488,10 +518,15 @@ export default function Representatives() {
               apiRequest('/api/unified-financial/sync-all-representatives', {
                 method: 'POST'
               }).then(() => {
+                // بروزرسانی همه کش‌ها
                 queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/unified-financial"] });
+                queryClient.invalidateQueries({ queryKey: ["debtor-representatives"] });
+                queryClient.refetchQueries({ queryKey: ["/api/representatives"] });
+                
                 toast({
-                  title: "موفقیت",
-                  description: "همگام‌سازی آمار مالی تمام نمایندگان کامل شد"
+                  title: "موفقیت", 
+                  description: "همگام‌سازی آمار مالی تمام نمایندگان کامل شد - جدول بروزرسانی شد"
                 });
               }).catch((error) => {
                 toast({
@@ -623,9 +658,7 @@ export default function Representatives() {
                       {formatCurrency(parseFloat(rep.totalSales))}
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      <span className={parseFloat(rep.totalDebt) > 1000000 ? "text-red-600 dark:text-red-400 font-semibold" : parseFloat(rep.totalDebt) > 500000 ? "text-orange-600 dark:text-orange-400 font-semibold" : ""}>
-                        {formatCurrency(parseFloat(rep.totalDebt))}
-                      </span>
+                      <RealTimeDebtCell representativeId={rep.id} />
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">

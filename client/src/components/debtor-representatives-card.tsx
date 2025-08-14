@@ -16,6 +16,11 @@ interface DebtorRepresentative {
   totalPayments: string;
 }
 
+interface GlobalSummary {
+  totalSystemDebt: string;
+  totalRepresentatives: number;
+}
+
 function DebtorRepresentativeRow({ representative }: { representative: DebtorRepresentative }) {
   const remainingDebt = parseFloat(representative.remainingDebt) || 0;
 
@@ -55,7 +60,7 @@ function DebtorRepresentativeRow({ representative }: { representative: DebtorRep
 
 export default function DebtorRepresentativesCard() {
   // Fetch debtor representatives data with fallback
-  const { data: debtorData, isLoading, error } = useQuery<DebtorRepresentative[]>({
+  const { data: debtorData, isLoading: isLoadingDebtors, error: errorDebtors } = useQuery<DebtorRepresentative[]>({
     queryKey: ["debtor-representatives"],
     queryFn: async () => {
       console.log('SHERLOCK v1.0: Fetching URL:', '/api/unified-financial/debtors');
@@ -104,13 +109,57 @@ export default function DebtorRepresentativesCard() {
     retryDelay: 1000
   });
 
-  if (isLoading) {
+  // Fetch global summary data
+  const { data: globalSummary, isLoading: isLoadingSummary, error: errorSummary } = useQuery<GlobalSummary>({
+    queryKey: ["global-financial-summary"],
+    queryFn: async () => {
+      console.log('SHERLOCK v23.0: Fetching URL:', '/api/unified-financial/summary');
+      try {
+        const response = await fetch('/api/unified-financial/summary', {
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          console.log(`SHERLOCK v23.0: Loaded global summary`);
+          // Assuming result.data contains totalSystemDebt and totalRepresentatives
+          return {
+            totalSystemDebt: result.data.totalSystemDebt || "0",
+            totalRepresentatives: result.data.totalRepresentatives || 0
+          };
+        } else {
+          console.log('SHERLOCK v23.0: Failed to load global summary, falling back to legacy endpoint.');
+          // Fallback to a legacy endpoint if available, or return default/empty
+          return { totalSystemDebt: "0", totalRepresentatives: 0 };
+        }
+      } catch (error) {
+        console.error('Error fetching global financial summary:', error);
+        return { totalSystemDebt: "0", totalRepresentatives: 0 };
+      }
+    },
+    staleTime: 180000, // 3 minutes
+    gcTime: 600000, // 10 minutes
+    refetchOnWindowFocus: false,
+    retry: 2,
+    refetchInterval: 300000, // 5 minutes
+    retryDelay: 1000
+  });
+
+  if (isLoadingDebtors) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
             <TrendingDown className="w-5 h-5 ml-2" />
-            بدهکاران اصلی
+            نمایندگان بدهکار
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -129,11 +178,11 @@ export default function DebtorRepresentativesCard() {
     );
   }
 
-  if (error) {
+  if (errorDebtors) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
             <TrendingDown className="w-5 h-5 ml-2 text-red-600" />
             نمایندگان بدهکار
           </CardTitle>
@@ -155,8 +204,8 @@ export default function DebtorRepresentativesCard() {
   if (!debtorData || debtorData.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
             <TrendingDown className="w-5 h-5 ml-2 text-red-600" />
             نمایندگان بدهکار
           </CardTitle>
@@ -177,18 +226,23 @@ export default function DebtorRepresentativesCard() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center">
-            <TrendingDown className="w-5 h-5 ml-2 text-red-600" />
-            نمایندگان بدهکار
+          <CardTitle className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+            <AlertTriangle className="w-5 h-5 text-red-500 ml-2" />
+            مطالبات معوق
           </CardTitle>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              {toPersianDigits(debtorData.length.toString())} نماینده
-            </span>
-            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-          </div>
+          {globalSummary && (
+            <div className="text-left">
+              <div className="text-sm text-gray-500 dark:text-gray-400">مجموع کل بدهی</div>
+              <div className="text-lg font-bold text-red-600 dark:text-red-400">
+                {formatCurrency(parseFloat(globalSummary.totalSystemDebt) || 0)}
+              </div>
+              <div className="text-xs text-gray-400">
+                ({toPersianDigits(globalSummary.totalRepresentatives.toString())} نماینده)
+              </div>
+            </div>
+          )}
         </div>
       </CardHeader>
       <CardContent>

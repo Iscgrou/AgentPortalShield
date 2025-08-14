@@ -233,6 +233,42 @@ router.post('/sync-all-representatives', requireAuth, async (req, res) => {
 });
 
 /**
+ * ✅ SHERLOCK v23.0: محاسبه مجموع بدهی کل سیستم
+ * GET /api/unified-financial/total-debt
+ */
+router.get('/total-debt', requireAuth, async (req, res) => {
+  try {
+    const summary = await unifiedFinancialEngine.calculateGlobalSummary();
+
+    res.json({
+      success: true,
+      data: {
+        totalSystemDebt: summary.totalSystemDebt,
+        totalRepresentatives: summary.totalRepresentatives,
+        activeRepresentatives: summary.activeRepresentatives,
+        debtDistribution: {
+          healthy: summary.healthyReps,
+          moderate: summary.moderateReps,
+          high: summary.highRiskReps,
+          critical: summary.criticalReps
+        }
+      },
+      meta: {
+        source: "UNIFIED FINANCIAL ENGINE v23.0",
+        timestamp: new Date().toISOString(),
+        accuracyGuaranteed: true
+      }
+    });
+  } catch (error) {
+    console.error('Error calculating total debt:', error);
+    res.status(500).json({
+      success: false,
+      error: "خطا در محاسبه مجموع بدهی"
+    });
+  }
+});
+
+/**
  * تست authentication
  */
 router.get('/auth-test', requireAuth, async (req, res) => {

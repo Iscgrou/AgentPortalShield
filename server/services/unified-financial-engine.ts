@@ -260,6 +260,10 @@ export class UnifiedFinancialEngine {
     try {
       const financialData = await this.calculateRepresentative(representativeId);
 
+      // پاک کردن cache برای refresh فوری
+      const cacheKey = `rep_calc_${representativeId}`;
+      UnifiedFinancialEngine.queryCache.delete(cacheKey);
+
       // بروزرسانی جدول representatives با بدهی صحیح
       await db.update(representatives)
         .set({
