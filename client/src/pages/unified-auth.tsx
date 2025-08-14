@@ -21,18 +21,21 @@ export default function UnifiedAuth() {
   const handleAuthRedirect = useCallback(() => {
     if (redirected.current) return;
 
-    if (!adminLoading && adminAuth) {
-      console.log('✅ Admin authenticated, redirecting...');
-      redirected.current = true;
-      setLocation("/admin");
-      return;
-    }
+    // Only redirect when authentication is confirmed and loading is complete
+    if (!adminLoading && !crmLoading) {
+      if (adminAuth) {
+        console.log('✅ Admin authenticated, redirecting...');
+        redirected.current = true;
+        setLocation("/admin");
+        return;
+      }
 
-    if (!crmLoading && crmAuth) {
-      console.log('✅ CRM authenticated, redirecting...');
-      redirected.current = true;
-      setLocation("/crm");
-      return;
+      if (crmAuth) {
+        console.log('✅ CRM authenticated, redirecting...');
+        redirected.current = true;
+        setLocation("/crm");
+        return;
+      }
     }
   }, [adminAuth, crmAuth, adminLoading, crmLoading, setLocation]);
 

@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🔍 Admin Auth: Initial check');
       checkAuth();
     }
-  }, []); // Empty dependency array - run only once
+  }, [checkAuth]); // Include checkAuth but prevent infinite loops with refs
 
   return (
     <AuthContext.Provider
