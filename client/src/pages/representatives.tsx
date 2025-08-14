@@ -368,17 +368,17 @@ export default function Representatives() {
     setIsPaymentDeleteConfirmOpen(true);
   };
 
-  // Update representative debt after invoice edit
-  const updateRepresentativeDebtMutation = useMutation({
-    mutationFn: async ({ id, newDebt }: { id: number, newDebt: string }) => {
-      return apiRequest(`/api/representatives/${id}`, {
-        method: "PUT",
-        data: { totalDebt: newDebt }
+  // ✅ SHERLOCK v23.0: همگام‌سازی صحیح بدهی نماینده
+  const syncRepresentativeDebtMutation = useMutation({
+    mutationFn: async (representativeId: number) => {
+      return apiRequest(`/api/unified-financial/sync-representative/${representativeId}`, {
+        method: "POST"
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
       queryClient.invalidateQueries({ queryKey: ["/api/unified-statistics/representatives"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/unified-financial"] });
     }
   });
 
@@ -476,10 +476,39 @@ export default function Representatives() {
             مدیریت جامع اطلاعات و عملکرد نمایندگان فروش
           </p>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="w-4 h-4 ml-2" />
-          نماینده جدید
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              toast({
+                title: "شروع همگام‌سازی",
+                description: "در حال همگام‌سازی آمار مالی تمام نمایندگان..."
+              });
+              apiRequest('/api/unified-financial/sync-all-representatives', {
+                method: 'POST'
+              }).then(() => {
+                queryClient.invalidateQueries({ queryKey: ["/api/representatives"] });
+                toast({
+                  title: "موفقیت",
+                  description: "همگام‌سازی آمار مالی تمام نمایندگان کامل شد"
+                });
+              }).catch((error) => {
+                toast({
+                  title: "خطا",
+                  description: "خطا در همگام‌سازی آمار مالی",
+                  variant: "destructive"
+                });
+              });
+            }}
+          >
+            <RefreshCw className="w-4 h-4 ml-2" />
+            همگام‌سازی آمار مالی
+          </Button>
+          <Button onClick={() => setIsCreateOpen(true)}>
+            <Plus className="w-4 h-4 ml-2" />
+            نماینده جدید
+          </Button>
+        </div>
       </div>
 
 
@@ -2153,6 +2182,9 @@ function CreatePaymentDialog({
       setPaymentDate("");
       setDescription("");
       setSelectedInvoiceId("auto");
+
+      // ✅ SHERLOCK v23.0: همگام‌سازی صحیح بدهی نماینده
+      await syncRepresentativeDebtMutation.mutateAsync(representative.id);
 
       // Complete Financial Synchronization Checklist Implementation
       await performComprehensiveFinancialSync();

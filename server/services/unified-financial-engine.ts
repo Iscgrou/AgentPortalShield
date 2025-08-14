@@ -1,7 +1,7 @@
 /**
- * SHERLOCK v18.2 UNIFIED FINANCIAL ENGINE
+ * SHERLOCK v23.0 UNIFIED FINANCIAL ENGINE - CORRECTED CALCULATIONS
  *
- * تنها سیستم محاسباتی مالی - جایگزین تمام سیستم‌های موازی
+ * تنها سیستم محاسباتی مالی - با منطق صحیح محاسبات
  * Real-time calculations with 100% accuracy guarantee
  */
 
@@ -14,11 +14,11 @@ export interface UnifiedFinancialData {
   representativeName: string;
   representativeCode: string;
 
-  // Real-time calculations ONLY
-  totalSales: number;
-  totalPaid: number;
-  totalUnpaid: number;
-  actualDebt: number;
+  // ✅ محاسبات صحیح طبق تعاریف استاندارد
+  totalSales: number;           // مجموع کل فاکتورهای صادر شده
+  totalPaid: number;           // مجموع پرداخت‌های تخصیص یافته
+  totalUnpaid: number;         // مجموع فاکتورهای پرداخت نشده
+  actualDebt: number;          // بدهی استاندارد = فروش کل - پرداخت تخصیص یافته
 
   // Performance metrics
   paymentRatio: number;
@@ -39,10 +39,10 @@ export interface GlobalFinancialSummary {
   totalRepresentatives: number;
   activeRepresentatives: number;
 
-  // Financial aggregates
-  totalSystemSales: number;
-  totalSystemPaid: number;
-  totalSystemDebt: number;
+  // Financial aggregates - استاندارد شده
+  totalSystemSales: number;      // مجموع کل فاکتورهای سیستم
+  totalSystemPaid: number;       // مجموع کل پرداخت‌های تخصیص یافته
+  totalSystemDebt: number;       // مجموع بدهی‌های استاندارد تمام نمایندگان
 
   // Distribution analysis
   healthyReps: number;
@@ -71,7 +71,7 @@ export class UnifiedFinancialEngine {
   }
 
   /**
-   * Real-time calculation for single representative - CACHED v18.8
+   * ✅ SHERLOCK v23.0: محاسبه صحیح مالی نماینده طبق تعاریف استاندارد
    */
   async calculateRepresentative(representativeId: number): Promise<UnifiedFinancialData> {
     // Check cache first
@@ -94,35 +94,31 @@ export class UnifiedFinancialEngine {
       throw new Error(`Representative ${representativeId} not found`);
     }
 
-    // Real-time invoice calculations - SHERLOCK v22.1 CRITICAL FIX
+    // ✅ محاسبه صحیح: فروش کل = مجموع کل فاکتورهای صادر شده
     const invoiceData = await db.select({
       count: sql<number>`COUNT(*)`,
-      totalAmount: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`,
-      paidAmount: sql<number>`COALESCE(SUM(CASE WHEN status = 'paid' THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
-      // ✅ CRITICAL FIX: Include 'partial' status in unpaid calculation
-      unpaidAmount: sql<number>`COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue', 'partial') THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
+      totalSales: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`, // فروش کل
       lastDate: sql<string>`MAX(created_at)`
     }).from(invoices).where(eq(invoices.representativeId, representativeId));
 
-    // Real-time payment calculations
+    // ✅ محاسبه صحیح: پرداخت تخصیص یافته = مجموع پرداخت‌های تخصیص یافته
     const paymentData = await db.select({
       count: sql<number>`COUNT(*)`,
-      allocatedAmount: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = true THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
+      totalPaid: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = true THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`, // پرداخت تخصیص یافته
       lastDate: sql<string>`MAX(payment_date)`
     }).from(payments).where(eq(payments.representativeId, representativeId));
 
     const invoice = invoiceData[0];
     const payment = paymentData[0];
 
-    // ✅ SHERLOCK v22.1 CRITICAL FIX: Calculate debt using REAL-TIME allocation
-    // Step 1: Get EXACT unpaid amount considering partial payments
-    const realTimeUnpaid = await this.calculateRealTimeUnpaidAmount(representativeId);
-
-    // Step 2: Calculate actual debt using allocated payments
-    const actualDebt = Math.max(0, realTimeUnpaid - payment.allocatedAmount);
+    // ✅ محاسبات صحیح طبق تعاریف استاندارد
+    const totalSales = invoice.totalSales;           // فروش کل
+    const totalPaid = payment.totalPaid;             // پرداخت تخصیص یافته
+    const actualDebt = Math.max(0, totalSales - totalPaid); // بدهی استاندارد
+    const totalUnpaid = actualDebt;                  // مجموع پرداخت نشده = بدهی استاندارد
 
     // Performance metrics
-    const paymentRatio = invoice.totalAmount > 0 ? (payment.allocatedAmount / invoice.totalAmount) * 100 : 0;
+    const paymentRatio = totalSales > 0 ? (totalPaid / totalSales) * 100 : 0;
 
     // Debt level classification
     let debtLevel: 'HEALTHY' | 'MODERATE' | 'HIGH' | 'CRITICAL';
@@ -136,10 +132,11 @@ export class UnifiedFinancialEngine {
       representativeName: rep[0].name,
       representativeCode: rep[0].code,
 
-      totalSales: invoice.totalAmount,
-      totalPaid: payment.allocatedAmount,
-      totalUnpaid: realTimeUnpaid, // ✅ Use real-time calculation
-      actualDebt,
+      // ✅ آمار مالی صحیح طبق تعاریف استاندارد
+      totalSales,      // فروش کل (استاندارد)
+      totalPaid,       // پرداخت تخصیص یافته
+      totalUnpaid,     // مجموع پرداخت نشده
+      actualDebt,      // بدهی استاندارد
 
       paymentRatio: Math.round(paymentRatio * 100) / 100,
       debtLevel,
@@ -162,50 +159,10 @@ export class UnifiedFinancialEngine {
   }
 
   /**
-   * SHERLOCK v22.1: Real-time unpaid amount calculation
-   * Accounts for partial payments and actual invoice-payment allocation
-   */
-  private async calculateRealTimeUnpaidAmount(representativeId: number): Promise<number> {
-    // Get all invoices for this representative
-    const invoiceList = await db.select({
-      id: invoices.id,
-      amount: invoices.amount,
-      status: invoices.status
-    }).from(invoices).where(eq(invoices.representativeId, representativeId));
-
-    let totalUnpaidAmount = 0;
-
-    for (const invoice of invoiceList) {
-      if (invoice.status === 'paid') {
-        // Skip fully paid invoices
-        continue;
-      }
-
-      // Calculate actual allocated payments for this specific invoice
-      const allocatedToThisInvoice = await db.select({
-        total: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`
-      }).from(payments).where(
-        and(
-          eq(payments.invoiceId, invoice.id),
-          eq(payments.isAllocated, true)
-        )
-      );
-
-      const allocatedAmount = allocatedToThisInvoice[0]?.total || 0;
-      const invoiceAmount = parseFloat(invoice.amount);
-      const remainingAmount = Math.max(0, invoiceAmount - allocatedAmount);
-
-      totalUnpaidAmount += remainingAmount;
-    }
-
-    return totalUnpaidAmount;
-  }
-
-  /**
-   * System-wide financial summary
+   * ✅ SHERLOCK v23.0: محاسبه صحیح آمار کلی سیستم
    */
   async calculateGlobalSummary(): Promise<GlobalFinancialSummary> {
-    console.log("🧮 UNIFIED FINANCIAL ENGINE: Calculating global summary...");
+    console.log("🧮 UNIFIED FINANCIAL ENGINE v23.0: Calculating corrected global summary...");
 
     // Count representatives
     const repCounts = await db.select({
@@ -213,34 +170,36 @@ export class UnifiedFinancialEngine {
       active: sql<number>`SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END)`
     }).from(representatives);
 
-    // Global invoice aggregates - SHERLOCK v22.1 FIX: Include partial status
-    const invoiceGlobal = await db.select({
-      totalAmount: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`,
-      paidAmount: sql<number>`COALESCE(SUM(CASE WHEN status = 'paid' THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
-      unpaidAmount: sql<number>`COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue', 'partial') THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`
-    }).from(invoices);
+    // ✅ محاسبه صحیح آمار کلی سیستم
+    const [systemSales, systemPaid] = await Promise.all([
+      // فروش کل سیستم = مجموع کل فاکتورهای صادر شده
+      db.select({
+        totalSystemSales: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`
+      }).from(invoices),
 
-    // Global payment aggregates
-    const paymentGlobal = await db.select({
-      allocatedAmount: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = true THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`
-    }).from(payments);
+      // پرداخت کل سیستم = مجموع پرداخت‌های تخصیص یافته
+      db.select({
+        totalSystemPaid: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = true THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`
+      }).from(payments)
+    ]);
 
-    // Simple debt distribution count
-    const allRepsWithDebt = await db.select({
-      repId: representatives.id,
-      debt: sql<number>`CAST(total_debt as DECIMAL)`
-    }).from(representatives);
+    const totalSystemSales = systemSales[0].totalSystemSales;
+    const totalSystemPaid = systemPaid[0].totalSystemPaid;
+    const totalSystemDebt = Math.max(0, totalSystemSales - totalSystemPaid); // بدهی کل سیستم
+
+    // Simple debt distribution count based on standard debt calculation
+    const allRepsWithDebt = await this.calculateAllRepresentativesDebt();
 
     let healthy = 0, moderate = 0, high = 0, critical = 0;
 
     allRepsWithDebt.forEach(rep => {
-      if (rep.debt === 0) healthy++;
-      else if (rep.debt <= 100000) moderate++;
-      else if (rep.debt <= 500000) high++;
+      const debt = rep.actualDebt;
+      if (debt === 0) healthy++;
+      else if (debt <= 100000) moderate++;
+      else if (debt <= 500000) high++;
       else critical++;
     });
 
-    const totalSystemDebt = invoiceGlobal[0].unpaidAmount - paymentGlobal[0].allocatedAmount;
     const systemAccuracy = 100; // Guaranteed by real-time calculations
 
     // Determine data integrity
@@ -255,8 +214,9 @@ export class UnifiedFinancialEngine {
       totalRepresentatives: repCounts[0].total,
       activeRepresentatives: repCounts[0].active,
 
-      totalSystemSales: invoiceGlobal[0].totalAmount,
-      totalSystemPaid: paymentGlobal[0].allocatedAmount,
+      // ✅ آمار صحیح سیستم
+      totalSystemSales,
+      totalSystemPaid,
       totalSystemDebt,
 
       healthyReps: healthy,
@@ -268,6 +228,79 @@ export class UnifiedFinancialEngine {
       lastCalculationTime: new Date().toISOString(),
       dataIntegrity
     };
+  }
+
+  /**
+   * ✅ محاسبه بدهی همه نمایندگان با منطق صحیح
+   */
+  private async calculateAllRepresentativesDebt(): Promise<Array<{id: number, actualDebt: number}>> {
+    const allReps = await db.select({
+      id: representatives.id
+    }).from(representatives);
+
+    const results = await Promise.all(
+      allReps.map(async (rep) => {
+        try {
+          const data = await this.calculateRepresentative(rep.id);
+          return { id: rep.id, actualDebt: data.actualDebt };
+        } catch (error) {
+          console.warn(`Failed to calculate debt for rep ${rep.id}:`, error);
+          return { id: rep.id, actualDebt: 0 };
+        }
+      })
+    );
+
+    return results;
+  }
+
+  /**
+   * ✅ SHERLOCK v23.0: بروزرسانی بدهی نماینده در جدول representatives
+   */
+  async syncRepresentativeDebt(representativeId: number): Promise<void> {
+    try {
+      const financialData = await this.calculateRepresentative(representativeId);
+
+      // بروزرسانی جدول representatives با بدهی صحیح
+      await db.update(representatives)
+        .set({
+          totalDebt: financialData.actualDebt.toString(),
+          totalSales: financialData.totalSales.toString(),
+          updatedAt: new Date()
+        })
+        .where(eq(representatives.id, representativeId));
+
+      console.log(`✅ Synced representative ${representativeId} debt: ${financialData.actualDebt}`);
+    } catch (error) {
+      console.error(`❌ Failed to sync representative ${representativeId} debt:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ همگام‌سازی تمام نمایندگان
+   */
+  async syncAllRepresentativesDebt(): Promise<void> {
+    console.log("🔄 SHERLOCK v23.0: Syncing all representatives debt...");
+
+    const allReps = await db.select({
+      id: representatives.id,
+      name: representatives.name
+    }).from(representatives);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const rep of allReps) {
+      try {
+        await this.syncRepresentativeDebt(rep.id);
+        successCount++;
+      } catch (error) {
+        console.error(`❌ Failed to sync rep ${rep.id} (${rep.name}):`, error);
+        errorCount++;
+      }
+    }
+
+    console.log(`✅ Debt synchronization complete: ${successCount} success, ${errorCount} errors`);
   }
 
   /**
@@ -289,7 +322,7 @@ export class UnifiedFinancialEngine {
    * Real-time debtor list - ULTRA OPTIMIZED v18.7
    */
   async getDebtorRepresentatives(limit: number = 50): Promise<UnifiedFinancialData[]> {
-    console.log(`🚀 SHERLOCK v18.7: Ultra-optimized debtor calculation for ${limit} records`);
+    console.log(`🚀 SHERLOCK v23.0: Ultra-optimized debtor calculation for ${limit} records`);
     const startTime = Date.now();
 
     try {
@@ -303,7 +336,7 @@ export class UnifiedFinancialEngine {
         code: representatives.code,
         totalDebt: representatives.totalDebt
       }).from(representatives)
-      .where(sql`CAST(total_debt as DECIMAL) > 50000`) // Only significant debts
+      .where(sql`CAST(total_debt as DECIMAL) > 1000`) // Only actual debts
       .orderBy(desc(sql`CAST(total_debt as DECIMAL)`))
       .limit(limit * 1.5); // Reduced buffer size
 
@@ -345,201 +378,13 @@ export class UnifiedFinancialEngine {
         .sort((a, b) => b.actualDebt - a.actualDebt)
         .slice(0, limit);
 
-      console.log(`✅ SHERLOCK v18.7: Generated ${sortedDebtors.length} debtors in ${Date.now() - startTime}ms`);
+      console.log(`✅ SHERLOCK v23.0: Generated ${sortedDebtors.length} debtors in ${Date.now() - startTime}ms`);
 
       return sortedDebtors;
 
     } catch (error) {
-      console.error(`❌ SHERLOCK v18.7: Error in debtor calculation:`, error);
+      console.error(`❌ SHERLOCK v23.0: Error in debtor calculation:`, error);
       return [];
-    }
-  }
-
-  /**
-   * 💰 SHERLOCK v1.0: تحلیل وضعیت مالی کلی سیستم
-   */
-  async generateFinancialSystemHealth(): Promise<{
-    totalDebt: number;
-    totalCredit: number;
-    totalRevenue: number;
-    activeDebtors: number;
-    overdueAmount: number;
-    healthScore: number;
-    recommendations: string[];
-  }> {
-    try {
-      console.log('🏥 SHERLOCK v1.0: Analyzing financial system health...');
-
-      // دریافت آمار کلی
-      const totalStats = await this.storage.query(`
-        SELECT
-          COALESCE(SUM(CAST(total_debt as DECIMAL)), 0) as total_debt,
-          COALESCE(SUM(CAST(credit as DECIMAL)), 0) as total_credit,
-          COALESCE(SUM(CAST(total_sales as DECIMAL)), 0) as total_revenue,
-          COUNT(CASE WHEN CAST(total_debt as DECIMAL) > 0 THEN 1 END) as active_debtors
-        FROM representatives
-        WHERE is_active = true
-      `);
-
-      // محاسبه سررسید گذشته
-      const overdueStats = await this.storage.query(`
-        SELECT COALESCE(SUM(CAST(amount as DECIMAL)), 0) as overdue_amount
-        FROM invoices
-        WHERE status IN ('unpaid', 'overdue')
-        AND due_date < CURRENT_DATE
-      `);
-
-      const stats = totalStats[0];
-      const overdue = overdueStats[0];
-
-      const totalDebt = parseFloat(stats.total_debt || '0');
-      const totalCredit = parseFloat(stats.total_credit || '0');
-      const totalRevenue = parseFloat(stats.total_revenue || '0');
-      const activeDebtors = parseInt(stats.active_debtors || '0');
-      const overdueAmount = parseFloat(overdue.overdue_amount || '0');
-
-      // محاسبه امتیاز سلامت (0-100)
-      let healthScore = 100;
-
-      // کسر امتیاز بر اساس نسبت بدهی به فروش
-      const debtRatio = totalRevenue > 0 ? (totalDebt / totalRevenue) * 100 : 0;
-      if (debtRatio > 50) healthScore -= 30;
-      else if (debtRatio > 30) healthScore -= 20;
-      else if (debtRatio > 15) healthScore -= 10;
-
-      // کسر امتیاز بر اساس سررسید گذشته
-      const overdueRatio = totalDebt > 0 ? (overdueAmount / totalDebt) * 100 : 0;
-      if (overdueRatio > 40) healthScore -= 25;
-      else if (overdueRatio > 25) healthScore -= 15;
-      else if (overdueRatio > 10) healthScore -= 10;
-
-      // کسر امتیاز بر اساس تعداد بدهکاران فعال
-      if (activeDebtors > 50) healthScore -= 15;
-      else if (activeDebtors > 30) healthScore -= 10;
-      else if (activeDebtors > 15) healthScore -= 5;
-
-      healthScore = Math.max(0, Math.min(100, healthScore));
-
-      // تولید توصیه‌ها
-      const recommendations: string[] = [];
-
-      if (debtRatio > 30) {
-        recommendations.push('نسبت بدهی به فروش بالا است - اقدام فوری برای وصول مطالبات');
-      }
-      if (overdueRatio > 25) {
-        recommendations.push('مقدار قابل توجهی از بدهی‌ها سررسید گذشته دارند');
-      }
-      if (activeDebtors > 30) {
-        recommendations.push('تعداد بدهکاران فعال زیاد است - نیاز به برنامه منظم پیگیری');
-      }
-      if (totalCredit > totalDebt * 0.3) {
-        recommendations.push('اعتبار بالا - فرصت برای تشویق خریدهای بیشتر');
-      }
-      if (healthScore > 80) {
-        recommendations.push('وضعیت مالی عالی - ادامه روند فعلی');
-      }
-
-      return {
-        totalDebt,
-        totalCredit,
-        totalRevenue,
-        activeDebtors,
-        overdueAmount,
-        healthScore,
-        recommendations
-      };
-
-    } catch (error) {
-      console.error('SHERLOCK v1.0: Error analyzing financial health:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 📈 SHERLOCK v1.0: تولید گزارش عملکرد مالی ماهانه
-   */
-  async generateMonthlyFinancialReport(year: number, month: number): Promise<{
-    month: string;
-    newInvoices: number;
-    totalInvoiceAmount: number;
-    paymentsReceived: number;
-    totalPaymentAmount: number;
-    newDebt: number;
-    debtReduction: number;
-    netChange: number;
-    topDebtors: any[];
-    topPayers: any[];
-  }> {
-    try {
-      console.log(`📈 SHERLOCK v1.0: Generating monthly report for ${year}/${month}`);
-
-      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-
-      // فاکتورهای جدید
-      const invoiceStats = await this.storage.query(`
-        SELECT
-          COUNT(*) as count,
-          COALESCE(SUM(CAST(amount as DECIMAL)), 0) as total_amount
-        FROM invoices
-        WHERE created_at >= $1 AND created_at <= $2
-      `, [startDate, endDate]);
-
-      // پرداخت‌های دریافت شده
-      const paymentStats = await this.storage.query(`
-        SELECT
-          COUNT(*) as count,
-          COALESCE(SUM(CAST(amount as DECIMAL)), 0) as total_amount
-        FROM payments
-        WHERE payment_date >= $1 AND payment_date <= $2
-      `, [startDate, endDate]);
-
-      // بهترین پرداخت کنندگان ماه
-      const topPayers = await this.storage.query(`
-        SELECT
-          r.name,
-          r.code,
-          COALESCE(SUM(CAST(p.amount as DECIMAL)), 0) as total_paid
-        FROM payments p
-        JOIN representatives r ON r.id = p.representative_id
-        WHERE p.payment_date >= $1 AND p.payment_date <= $2
-        GROUP BY r.id, r.name, r.code
-        ORDER BY total_paid DESC
-        LIMIT 10
-      `, [startDate, endDate]);
-
-      const invoiceData = invoiceStats[0];
-      const paymentData = paymentStats[0];
-
-      const newInvoices = parseInt(invoiceData.count || '0');
-      const totalInvoiceAmount = parseFloat(invoiceData.total_amount || '0');
-      const paymentsReceived = parseInt(paymentData.count || '0');
-      const totalPaymentAmount = parseFloat(paymentData.total_amount || '0');
-
-      const newDebt = totalInvoiceAmount;
-      const debtReduction = totalPaymentAmount;
-      const netChange = totalPaymentAmount - totalInvoiceAmount;
-
-      return {
-        month: `${year}/${month}`,
-        newInvoices,
-        totalInvoiceAmount,
-        paymentsReceived,
-        totalPaymentAmount,
-        newDebt,
-        debtReduction,
-        netChange,
-        topDebtors: [], // خالی برای الان
-        topPayers: topPayers.map(p => ({
-          name: p.name,
-          code: p.code,
-          amount: parseFloat(p.total_paid)
-        }))
-      };
-
-    } catch (error) {
-      console.error('SHERLOCK v1.0: Error generating monthly report:', error);
-      throw error;
     }
   }
 }

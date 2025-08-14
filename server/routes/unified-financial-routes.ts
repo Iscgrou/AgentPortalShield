@@ -177,6 +177,62 @@ router.get('/all-representatives', requireAuth, async (req, res) => {
 });
 
 /**
+ * ✅ SHERLOCK v23.0: همگام‌سازی بدهی نماینده
+ * POST /api/unified-financial/sync-representative/:id
+ */
+router.post('/sync-representative/:id', requireAuth, async (req, res) => {
+  try {
+    const representativeId = parseInt(req.params.id);
+    
+    if (isNaN(representativeId)) {
+      return res.status(400).json({
+        success: false,
+        error: "شناسه نماینده نامعتبر است"
+      });
+    }
+
+    await unifiedFinancialEngine.syncRepresentativeDebt(representativeId);
+
+    res.json({
+      success: true,
+      message: "همگام‌سازی بدهی نماینده انجام شد",
+      representativeId,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error syncing representative debt:', error);
+    res.status(500).json({
+      success: false,
+      error: "خطا در همگام‌سازی بدهی نماینده"
+    });
+  }
+});
+
+/**
+ * ✅ SHERLOCK v23.0: همگام‌سازی تمام نمایندگان
+ * POST /api/unified-financial/sync-all-representatives
+ */
+router.post('/sync-all-representatives', requireAuth, async (req, res) => {
+  try {
+    await unifiedFinancialEngine.syncAllRepresentativesDebt();
+
+    res.json({
+      success: true,
+      message: "همگام‌سازی تمام نمایندگان انجام شد",
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error syncing all representatives debt:', error);
+    res.status(500).json({
+      success: false,
+      error: "خطا در همگام‌سازی تمام نمایندگان"
+    });
+  }
+});
+
+/**
  * تست authentication
  */
 router.get('/auth-test', requireAuth, async (req, res) => {
