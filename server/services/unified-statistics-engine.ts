@@ -84,9 +84,27 @@ export interface RecentActivity {
 
 export class UnifiedStatisticsEngine {
   // Enhanced cache for performance optimization with separate cache keys
-  private static cache = new Map<string, { data: any; timestamp: number }>();
-  private static readonly CACHE_DURATION = 5 * 60 * 1000; // Increased to 5 minutes for better performance
-  private static readonly REPRESENTATIVE_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes for representative data
+  private static cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+  private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes for better performance
+  private static readonly HIGH_PRIORITY_CACHE_TTL = 30 * 1000; // 30 seconds for critical data
+
+  /**
+   * Helper to get data from cache
+   */
+  private static getFromCache(key: string): { data: any; timestamp: number; ttl: number } | undefined {
+    const cached = UnifiedStatisticsEngine.cache.get(key);
+    if (cached && (Date.now() - cached.timestamp) < cached.ttl) {
+      return cached;
+    }
+    return undefined;
+  }
+
+  /**
+   * Helper to set data in cache
+   */
+  private static setToCache(key: string, data: any, ttl: number = UnifiedStatisticsEngine.CACHE_TTL) {
+    UnifiedStatisticsEngine.cache.set(key, { data, timestamp: Date.now(), ttl });
+  }
 
   /**
    * دریافت آمار کامل سیستم - Dashboard اصلی
@@ -96,8 +114,8 @@ export class UnifiedStatisticsEngine {
     const cacheKey = 'global-statistics';
 
     // Check cache
-    const cached = UnifiedStatisticsEngine.cache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < UnifiedStatisticsEngine.CACHE_DURATION) {
+    const cached = UnifiedStatisticsEngine.getFromCache(cacheKey);
+    if (cached) {
       return { 
         ...cached.data, 
         responseTime: Date.now() - startTime,
@@ -164,7 +182,7 @@ export class UnifiedStatisticsEngine {
     };
 
     // Cache results
-    UnifiedStatisticsEngine.cache.set(cacheKey, { data: globalStats, timestamp: Date.now() });
+    UnifiedStatisticsEngine.setToCache(cacheKey, globalStats);
 
     console.log(`✅ SHERLOCK v18.0: Global statistics generated in ${globalStats.responseTime}ms`);
     return globalStats;
@@ -177,8 +195,8 @@ export class UnifiedStatisticsEngine {
     const startTime = Date.now();
     const cacheKey = 'representative-statistics';
 
-    const cached = UnifiedStatisticsEngine.cache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < UnifiedStatisticsEngine.REPRESENTATIVE_CACHE_DURATION) {
+    const cached = UnifiedStatisticsEngine.getFromCache(cacheKey);
+    if (cached) {
       return { ...cached.data, lastSyncTime: new Date().toISOString() };
     }
 
@@ -201,7 +219,7 @@ export class UnifiedStatisticsEngine {
       lastSyncTime: new Date().toISOString()
     };
 
-    UnifiedStatisticsEngine.cache.set(cacheKey, { data: repStats, timestamp: Date.now() });
+    UnifiedStatisticsEngine.setToCache(cacheKey, repStats);
 
     console.log(`✅ Representative statistics generated in ${Date.now() - startTime}ms`);
     return repStats;

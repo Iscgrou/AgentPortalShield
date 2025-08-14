@@ -51,19 +51,68 @@ function DebtorRepresentativeRow({ representative }: { representative: DebtorRep
 }
 
 export default function DebtorRepresentativesCard() {
-  const { data: debtorReps, isLoading, error } = useQuery<DebtorRepresentative[]>({
-    queryKey: ["/api/dashboard/debtor-representatives"],
+  // Fetch debtor representatives data with fallback
+  const { data: debtorData, isLoading, error } = useQuery<DebtorRepresentative[]>({
+    queryKey: ["debtor-representatives"],
     queryFn: async () => {
       console.log('SHERLOCK v18.4: Fetching URL:', '/api/unified-financial/debtors');
-      const response = await fetch('/api/unified-financial/debtors');
-      if (!response.ok) throw new Error('Failed to fetch debtor representatives');
-      const result = await response.json();
-      return result.success ? result.data : result;
+
+      try {
+        const response = await fetch('/api/unified-financial/debtors', {
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          return result.data || [];
+        }
+
+        // Fallback to legacy endpoint if unified endpoint fails
+        console.log('Fallback to legacy endpoint');
+        const fallbackResponse = await fetch('/api/dashboard/debtor-representatives', {
+          credentials: 'include'
+        });
+
+        if (!fallbackResponse.ok) {
+          throw new Error('Both endpoints failed');
+        }
+
+        return await fallbackResponse.json();
+      } catch (err) {
+        console.error('Error fetching debtor representatives:', err);
+        throw err;
+      }
     },
-    refetchInterval: 30000
+    retry: 2,
+    staleTime: 30000
   });
 
   if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <TrendingDown className="w-5 h-5 ml-2" />
+            بدهکاران اصلی
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={`skeleton-${i}`} className="animate-pulse">
+                <div className="flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-800 rounded">
+                  <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/3"></div>
+                  <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/4"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
     return (
       <Card>
         <CardHeader>
@@ -73,26 +122,20 @@ export default function DebtorRepresentativesCard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center justify-between py-3">
-                <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                  <Skeleton className="w-8 h-8 rounded-full" />
-                  <div>
-                    <Skeleton className="h-4 w-32 mb-1" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                </div>
-                <Skeleton className="h-4 w-20" />
-              </div>
-            ))}
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
+            </div>
+            <p className="text-red-600 dark:text-red-400">
+              خطا در بارگذاری داده‌های نمایندگان بدهکار. لطفاً دوباره تلاش کنید.
+            </p>
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  if (!debtorReps || debtorReps.length === 0) {
+  if (!debtorData || debtorData.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -125,7 +168,7 @@ export default function DebtorRepresentativesCard() {
           </CardTitle>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500 dark:text-gray-400">
-              {toPersianDigits(debtorReps.length.toString())} نماینده
+              {toPersianDigits(debtorData.length.toString())} نماینده
             </span>
             <div className="w-2 h-2 bg-red-500 rounded-full"></div>
           </div>
@@ -134,10 +177,10 @@ export default function DebtorRepresentativesCard() {
       <CardContent>
         <div className="max-h-80 overflow-y-auto space-y-0 border border-gray-200 dark:border-gray-700 rounded-lg">
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {debtorReps.map((representative) => (
-              <DebtorRepresentativeRow 
-                key={representative.id} 
-                representative={representative} 
+            {debtorData.slice(0, 10).map((debtor: any, index: number) => (
+              <DebtorRepresentativeRow
+                key={debtor.id || debtor.code || `debtor-${index}`}
+                representative={debtor}
               />
             ))}
           </div>

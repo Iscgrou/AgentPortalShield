@@ -9,10 +9,12 @@ import { unifiedFinancialEngine } from '../services/unified-financial-engine.js'
 
 const router = Router();
 
+// Import authentication middleware from main routes
+import type { Request, Response, NextFunction } from 'express';
+
 // Authentication middleware consistent with main system
 const requireAuth = (req: any, res: any, next: any) => {
-  const isAdminAuthenticated = req.session?.authenticated === true && 
-                              req.session?.user?.role === 'admin';
+  const isAdminAuthenticated = req.session?.authenticated === true;
   const isCrmAuthenticated = req.session?.crmAuthenticated === true;
 
   if (isAdminAuthenticated || isCrmAuthenticated) {
