@@ -2,8 +2,8 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { sql, eq, and, or } from "drizzle-orm";
-import { invoices } from "@shared/schema";
+import { sql, eq, and, or, like, gte, lte, asc } from "drizzle-orm";
+import { invoices, representatives, payments } from "@shared/schema";
 // CRM routes are imported in registerCrmRoutes function
 
 import multer from "multer";
@@ -50,6 +50,9 @@ import { registerSettingsRoutes } from "./routes/settings-routes";
 import bcrypt from "bcryptjs";
 // Commented out temporarily - import { generateFinancialReport } from "./services/report-generator";
 
+// New import for unified financial engine
+import { unifiedFinancialEngine } from './services/unified-financial-engine.js';
+
 // Configure multer for file uploads with broader JSON acceptance
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -73,7 +76,7 @@ function requireAuth(req: any, res: any, next: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
+
   // Initialize default admin user
   try {
     await storage.initializeDefaultAdminUser("mgr", "8679");
@@ -90,35 +93,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register essential CRM routes (core functionality only)
   registerCrmRoutes(app, storage);
-  
+
   // Register Settings routes (core system settings)
   registerSettingsRoutes(app);
-  
+
   // SHERLOCK v18.4: سیستم مالی یکپارچه واحد - تنها سیستم مالی فعال
   const unifiedFinancialRoutes = (await import('./routes/unified-financial-routes.js')).default;
   app.use('/api/unified-financial', unifiedFinancialRoutes);
-  
+
   // SHERLOCK v18.4: آمار یکپارچه واحد - جایگزین همه سیستم‌های آماری موازی
   const unifiedStatisticsRoutes = (await import("./routes/unified-statistics-routes")).default;
   app.use("/api/unified-statistics", unifiedStatisticsRoutes);
-  
+
 
 
   // xAI Grok Configuration API
   app.post("/api/settings/xai-grok/configure", requireAuth, async (req, res) => {
     try {
       const { apiKey } = req.body;
-      
+
       if (!apiKey) {
         return res.status(400).json({ error: "کلید API الزامی است" });
       }
 
       // Update XAI Grok engine configuration  
       xaiGrokEngine.updateConfiguration(apiKey);
-      
+
       // Save to settings
       await storage.updateSetting('XAI_API_KEY', apiKey);
-      
+
       res.json({ 
         success: true, 
         message: "تنظیمات xAI Grok ذخیره شد" 
@@ -136,27 +139,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "خطا در تست اتصال" });
     }
   });
-  
+
   // SHERLOCK v15.0 FIX: Add backward compatibility for both login endpoints
   // Main admin login endpoint
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { username, password } = req.body;
-      
+
       if (!username || !password) {
         return res.status(400).json({ error: "نام کاربری و رمز عبور الزامی است" });
       }
 
       // Get admin user from database
       const adminUser = await storage.getAdminUser(username);
-      
+
       if (!adminUser || !adminUser.isActive) {
         return res.status(401).json({ error: "نام کاربری یا رمز عبور اشتباه است" });
       }
 
       // Verify password
       const isPasswordValid = await bcrypt.compare(password, adminUser.passwordHash);
-      
+
       if (!isPasswordValid) {
         return res.status(401).json({ error: "نام کاربری یا رمز عبور اشتباه است" });
       }
@@ -245,7 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const representatives = await storage.getRepresentatives();
       const invoices = await storage.getInvoices();
       const payments = await storage.getPayments();
-      
+
       // Calculate real-time sync metrics
       const syncStatus = {
         lastSyncTime: new Date().toISOString(),
@@ -266,7 +269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         conflictCount: 0,
         autoResolvedConflicts: 0
       };
-      
+
       res.json(syncStatus);
     } catch (error) {
       res.status(500).json({ error: "خطا در بررسی وضعیت همگام‌سازی" });
@@ -276,18 +279,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/sync/force-update", requireAuth, async (req, res) => {
     try {
       const startTime = Date.now();
-      
+
       // Update all representative financials (atomic operation)
       const representatives = await storage.getRepresentatives();
       let updatedCount = 0;
-      
+
       for (const rep of representatives) {
         await storage.updateRepresentativeFinancials(rep.id);
         updatedCount++;
       }
-      
+
       const duration = Date.now() - startTime;
-      
+
       await storage.createActivityLog({
         type: "system_sync",
         description: `همگام‌سازی اجباری انجام شد: ${updatedCount} نماینده بروزرسانی شد`,
@@ -298,7 +301,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           syncType: "FORCE_UPDATE"
         }
       });
-      
+
       res.json({
         success: true,
         message: "همگام‌سازی با موفقیت انجام شد",
@@ -325,10 +328,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/representatives/statistics", requireAuth, async (req, res) => {
     try {
       const representatives = await storage.getRepresentatives();
-      
+
       // SHERLOCK v11.0: Use unified batch-based calculation for activeCount
       const batchBasedActiveCount = await storage.getBatchBasedActiveRepresentatives();
-      
+
       const stats = {
         totalCount: representatives.length,
         activeCount: batchBasedActiveCount, // 🎯 SYNC: Now matches dashboard calculation
@@ -338,7 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         avgPerformance: representatives.length > 0 ? 
           representatives.reduce((sum, rep) => sum + parseFloat(rep.totalSales || "0"), 0) / representatives.length : 0
       };
-      
+
       console.log(`📊 SHERLOCK v11.0: Representatives statistics - Active: ${stats.activeCount} (batch-based), Total: ${stats.totalCount}`);
       res.json(stats);
     } catch (error) {
@@ -353,11 +356,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!representative) {
         return res.status(404).json({ error: "نماینده یافت نشد" });
       }
-      
+
       // Get related data
       const invoices = await storage.getInvoicesByRepresentative(representative.id);
       const payments = await storage.getPaymentsByRepresentative(representative.id);
-      
+
       res.json({
         representative,
         invoices,
@@ -418,7 +421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/reset-data", requireAuth, async (req, res) => {
     try {
       const resetOptions = req.body;
-      
+
       // Validate request
       if (!resetOptions || typeof resetOptions !== 'object') {
         return res.status(400).json({ error: "گزینه‌های بازنشانی نامعتبر است" });
@@ -431,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log('Data reset requested:', resetOptions);
-      
+
       // Log the reset operation
       await storage.createActivityLog({
         type: 'system',
@@ -441,9 +444,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const result = await storage.resetData(resetOptions);
-      
+
       console.log('Data reset completed:', result.deletedCounts);
-      
+
       res.json({
         success: true,
         message: "بازنشانی اطلاعات با موفقیت انجام شد",
@@ -462,10 +465,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!representative) {
         return res.status(404).json({ error: "پورتال یافت نشد" });
       }
-      
+
       const invoices = await storage.getInvoicesByRepresentative(representative.id);
       const payments = await storage.getPaymentsByRepresentative(representative.id);
-      
+
       // Fetch portal customization settings
       const [
         portalTitle,
@@ -490,14 +493,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getSetting('invoice_show_description'),
         storage.getSetting('invoice_show_admin_username')
       ]);
-      
+
       const portalConfig = {
         title: portalTitle?.value || 'پرتال عمومی نماینده',
         description: portalDescription?.value || 'مشاهده وضعیت مالی و فاکتورهای شما',
         showOwnerName: showOwnerName?.value === 'true',
         showDetailedUsage: showDetailedUsage?.value === 'true',
         customCss: customCss?.value || '',
-        
+
         // Invoice display settings
         showUsageDetails: showUsageDetails?.value === 'true',
         showEventTimestamp: showEventTimestamp?.value === 'true',
@@ -505,14 +508,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         showDescription: showDescription?.value === 'true',
         showAdminUsername: showAdminUsername?.value === 'true'
       };
-      
+
       // SHERLOCK v11.5: Sort invoices by FIFO principle (oldest first)
       const sortedInvoices = invoices.sort((a, b) => {
         const dateA = new Date(a.issueDate || a.createdAt);
         const dateB = new Date(b.issueDate || b.createdAt);
         return dateA.getTime() - dateB.getTime(); // FIFO: Oldest first
       });
-      
+
       // Don't expose sensitive data in public portal
       const publicData = {
         name: representative.name,
@@ -542,7 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return dateB.getTime() - dateA.getTime();
         })
       };
-      
+
       res.json(publicData);
     } catch (error) {
       console.error('Portal API error:', error);
@@ -577,7 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 30;
       const search = req.query.search as string;
       const status = req.query.status as string;
-      
+
       // Get manual invoices with representative info
       const manualInvoices = await storage.getManualInvoices({
         page,
@@ -585,7 +588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         search,
         status
       });
-      
+
       console.log(`📋 Found ${manualInvoices.data.length} manual invoices`);
       res.json(manualInvoices);
     } catch (error) {
@@ -612,10 +615,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!partner) {
         return res.status(404).json({ error: "همکار فروش یافت نشد" });
       }
-      
+
       // Get related representatives
       const representatives = await storage.getRepresentativesBySalesPartner(id);
-      
+
       res.json({
         partner,
         representatives
@@ -674,11 +677,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('🗑️ SHERLOCK v1.0: حذف امن پرداخت');
       const paymentId = parseInt(req.params.id);
-      
+
       // Get payment details for audit and financial impact calculation
       const payments = await storage.getPayments();
       const payment = payments.find(p => p.id === paymentId);
-      
+
       if (!payment) {
         return res.status(404).json({ error: "پرداخت یافت نشد" });
       }
@@ -691,7 +694,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // CRITICAL: Update representative financial data after payment deletion
       console.log(`🔄 به‌روزرسانی اطلاعات مالی نماینده ${payment.representativeId}`);
       await storage.updateRepresentativeFinancials(payment.representativeId);
-      
+
       // CRITICAL: Invalidate CRM cache to ensure real-time sync
       invalidateCrmCache();
       console.log('🗑️ CRM cache invalidated for immediate synchronization');
@@ -755,12 +758,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertPaymentSchema.parse(req.body);
       const payment = await storage.createPayment(validatedData);
-      
+
       // Auto-allocate to oldest unpaid invoice if representativeId provided
       if (validatedData.representativeId) {
         await storage.autoAllocatePaymentToInvoices(payment.id, validatedData.representativeId);
       }
-      
+
       res.json(payment);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -785,7 +788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const paymentId = parseInt(req.params.id);
       const { invoiceId } = req.body;
-      
+
       const payment = await storage.allocatePaymentToInvoice(paymentId, invoiceId);
       res.json(payment);
     } catch (error) {
@@ -814,7 +817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const representativeId = parseInt(req.params.id);
       const representative = await storage.getRepresentative(representativeId);
-      
+
       if (!representative) {
         return res.status(404).json({ error: "نماینده یافت نشد" });
       }
@@ -840,7 +843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const representativeId = parseInt(req.params.id);
       const representative = await storage.getRepresentative(representativeId);
-      
+
       if (!representative) {
         return res.status(404).json({ error: "نماینده یافت نشد" });
       }
@@ -863,12 +866,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const representativeId = parseInt(req.params.representativeId);
       const invoices = await storage.getInvoicesByRepresentative(representativeId);
-      
+
       // SHERLOCK v11.5: Enhanced filter to include partial invoices
       const unpaidInvoices = invoices.filter(invoice => 
         invoice.status === 'unpaid' || invoice.status === 'overdue' || invoice.status === 'partial'
       );
-      
+
       res.json(unpaidInvoices);
     } catch (error) {
       console.error('Error fetching unpaid invoices:', error);
@@ -902,7 +905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('🔧 فاز ۲: ایجاد فاکتور دستی');
       const validatedData = insertInvoiceSchema.parse(req.body);
-      
+
       // Check if representative exists
       const representative = await storage.getRepresentative(validatedData.representativeId);
       if (!representative) {
@@ -960,7 +963,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🔧 فاز ۲: ویرایش فاکتور');
       const invoiceId = parseInt(req.params.id);
       const updateData = req.body;
-      
+
       // Get original invoice for audit trail
       const originalInvoice = await storage.getInvoice(invoiceId);
       if (!originalInvoice) {
@@ -969,7 +972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update invoice
       const updatedInvoice = await storage.updateInvoice(invoiceId, updateData);
-      
+
       // Update representative financial data if amount changed
       if (updateData.amount && parseFloat(updateData.amount) !== parseFloat(originalInvoice.amount)) {
         await storage.updateRepresentativeFinancials(originalInvoice.representativeId);
@@ -1005,12 +1008,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('📋 SHERLOCK v12.1: Fetching all invoices for main invoices page');
       const startTime = Date.now();
-      
+
       const invoices = await storage.getInvoices();
-      
+
       const responseTime = Date.now() - startTime;
       console.log(`✅ ${invoices.length} فاکتور در ${responseTime}ms بارگذاری شد`);
-      
+
       res.json(invoices);
     } catch (error) {
       console.error('❌ خطا در دریافت فهرست فاکتورها:', error);
@@ -1022,23 +1025,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/invoices/with-batch-info", requireAuth, async (req, res) => {
     try {
       console.log('📋 SHERLOCK v12.1: دریافت کامل فاکتورها با pagination صحیح');
-      
+
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 30;
       const statusFilter = req.query.status as string || 'all';
       const searchTerm = req.query.search as string || '';
       const telegramFilter = req.query.telegram as string || 'all';
-      
+
       const invoices = await storage.getInvoices();
       const representatives = await storage.getRepresentatives();
-      
+
       // Create lookup maps for performance  
       const repMap = new Map(representatives.map(rep => [rep.id, rep]));
-      
+
       // Enhance invoices with additional info FIRST
       let enhancedInvoices = invoices.map(invoice => {
         const rep = repMap.get(invoice.representativeId);
-        
+
         return {
           ...invoice,
           representativeName: rep?.name || 'نامشخص',
@@ -1046,7 +1049,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           panelUsername: rep?.panelUsername
         };
       });
-      
+
       // Apply search filter
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
@@ -1056,12 +1059,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           invoice.representativeCode?.toLowerCase().includes(searchLower)
         );
       }
-      
+
       // Apply status filter
       if (statusFilter && statusFilter !== 'all') {
         enhancedInvoices = enhancedInvoices.filter(invoice => invoice.status === statusFilter);
       }
-      
+
       // Apply telegram status filter
       if (telegramFilter && telegramFilter !== 'all') {
         if (telegramFilter === 'sent') {
@@ -1070,7 +1073,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           enhancedInvoices = enhancedInvoices.filter(invoice => !invoice.sentToTelegram);
         }
       }
-      
+
       // SHERLOCK v12.2: Apply Display sorting - newest invoices first for UI
       // NOTE: This ONLY affects display order, not payment allocation (which uses FIFO)
       enhancedInvoices.sort((a, b) => {
@@ -1078,16 +1081,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const dateB = new Date(b.issueDate || b.createdAt).getTime();
         return dateB - dateA; // Descending: newest first for display
       });
-      
+
       // Calculate pagination
       const totalCount = enhancedInvoices.length;
       const totalPages = Math.ceil(totalCount / limit);
       const startIndex = (page - 1) * limit;
       const endIndex = startIndex + limit;
       const paginatedInvoices = enhancedInvoices.slice(startIndex, endIndex);
-      
+
       console.log(`✅ صفحه ${page}: ${paginatedInvoices.length} فاکتور از ${totalCount} فاکتور کل (${totalPages} صفحه)`);
-      
+
       res.json({
         data: paginatedInvoices,
         pagination: {
@@ -1109,9 +1112,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/invoices/statistics", requireAuth, async (req, res) => {
     try {
       console.log('📊 SHERLOCK v12.1: Calculating invoice statistics');
-      
+
       const invoices = await storage.getInvoices();
-      
+
       const stats = {
         totalInvoices: invoices.length,
         unpaidCount: invoices.filter(inv => inv.status === 'unpaid').length,
@@ -1129,7 +1132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sentToTelegramCount: invoices.filter(inv => inv.sentToTelegram).length,
         unsentToTelegramCount: invoices.filter(inv => !inv.sentToTelegram).length
       };
-      
+
       console.log('📊 آمار فاکتورها:', stats);
       res.json(stats);
     } catch (error) {
@@ -1143,7 +1146,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('📨 SHERLOCK v12.3: Sending invoices to Telegram');
       const { invoiceIds } = req.body;
-      
+
       if (!invoiceIds || !Array.isArray(invoiceIds)) {
         return res.status(400).json({ error: "شناسه فاکتورها الزامی است" });
       }
@@ -1169,14 +1172,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: "تنظیمات تلگرام کامل نیست. لطفاً Bot Token و Chat ID را در تنظیمات وارد کنید." 
         });
       }
-      
+
       let successCount = 0;
       let failedCount = 0;
-      
+
       for (const invoiceId of invoiceIds) {
         try {
           console.log(`📋 Processing invoice ${invoiceId}`);
-          
+
           // Get invoice details
           const invoice = await storage.getInvoice(invoiceId);
           if (!invoice) {
@@ -1212,7 +1215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Send to Telegram
           const success = await sendInvoiceToTelegram(botToken, chatId, telegramMessage, template);
-          
+
           if (success) {
             // Mark as sent
             await storage.updateInvoice(invoiceId, {
@@ -1239,9 +1242,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           failedCount++;
         }
       }
-      
+
       console.log(`✅ SHERLOCK v12.3: ارسال تلگرام کامل شد - ${successCount} موفق, ${failedCount} ناموفق`);
-      
+
       res.json({
         success: successCount,
         failed: failedCount,
@@ -1258,7 +1261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('🔧 فاز ۲: حذف امن فاکتور');
       const invoiceId = parseInt(req.params.id);
-      
+
       // Get invoice details for audit
       const invoice = await storage.getInvoice(invoiceId);
       if (!invoice) {
@@ -1273,7 +1276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // CRITICAL: Update representative financial data after deletion
       console.log(`🔄 به‌روزرسانی اطلاعات مالی نماینده ${invoice.representativeId}`);
       await storage.updateRepresentativeFinancials(invoice.representativeId);
-      
+
       // CRITICAL: Invalidate CRM cache to ensure real-time sync
       invalidateCrmCache();
       console.log('🗑️ CRM cache invalidated for immediate synchronization');
@@ -1319,7 +1322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "شناسه فاکتور نامعتبر است" });
       }
       const invoice = await storage.getInvoice(invoiceId);
-      
+
       if (!invoice) {
         return res.status(404).json({ error: "فاکتور یافت نشد" });
       }
@@ -1342,9 +1345,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/invoices/export", requireAuth, async (req, res) => {
     try {
       console.log('📄 SHERLOCK v12.1: Exporting invoices to Excel/CSV');
-      
+
       const invoices = await storage.getInvoices();
-      
+
       // Prepare export data with enhanced information
       const exportData = invoices.map(invoice => ({
         'شماره فاکتور': invoice.invoiceNumber,
@@ -1358,7 +1361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'ارسال به تلگرام': invoice.sentToTelegram ? 'ارسال شده' : 'ارسال نشده',
         'تاریخ ایجاد': invoice.createdAt
       }));
-      
+
       res.json({
         success: true,
         data: exportData,
@@ -1372,13 +1375,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // فاز ۳: Payment Synchronization API Routes
-  
+
   // Get unallocated payments API
   app.get("/api/payments/unallocated", requireAuth, async (req, res) => {
     try {
       const representativeId = req.query.representativeId ? parseInt(req.query.representativeId as string) : undefined;
       const unallocatedPayments = await storage.getUnallocatedPayments(representativeId);
-      
+
       res.json(unallocatedPayments);
     } catch (error) {
       console.error('Error fetching unallocated payments:', error);
@@ -1391,7 +1394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const representativeId = parseInt(req.params.representativeId);
       const { amount, paymentDate, description, allocations } = req.body;
-      
+
       // Create the main payment record first
       const paymentData = {
         representativeId,
@@ -1400,9 +1403,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description,
         isAllocated: true
       };
-      
+
       const payment = await storage.createPayment(paymentData);
-      
+
       // Process allocations for each invoice if provided
       if (allocations && allocations.length > 0) {
         for (const allocation of allocations) {
@@ -1415,7 +1418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // SHERLOCK v1.0 FIX: Call correct auto-allocation function
         await storage.autoAllocatePaymentToInvoices(payment.id, representativeId);
       }
-      
+
       await storage.createActivityLog({
         type: "payment_auto_allocation",
         description: `تخصیص خودکار پرداخت ${amount} ریال برای نماینده ${representativeId}`,
@@ -1448,12 +1451,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { reason, invoiceId, amountChange, timestamp } = req.body;
-      
+
       console.log('Sync debt request:', { id, reason, invoiceId, amountChange });
-      
+
       // Recalculate actual debt from database
       const representativeId = parseInt(id);
-      
+
       // Calculate total unpaid invoices for this representative
       const unpaidResult = await db.select({ 
         totalDebt: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
@@ -1463,17 +1466,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           or(eq(invoices.status, 'unpaid'), eq(invoices.status, 'overdue'))
         )
       );
-      
+
       // Calculate total sales (all invoices)
       const salesResult = await db.select({ 
         totalSales: sql<string>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
       }).from(invoices).where(eq(invoices.representativeId, representativeId));
-      
+
       const actualTotalDebt = unpaidResult[0]?.totalDebt || "0";
       const actualTotalSales = salesResult[0]?.totalSales || "0";
-      
+
       console.log('Calculated debt:', { actualTotalDebt, actualTotalSales });
-      
+
       // Update representative with calculated values
       const updatedRep = await storage.updateRepresentative(representativeId, {
         totalDebt: actualTotalDebt,
@@ -1569,18 +1572,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/payments/allocate", requireAuth, async (req, res) => {
     try {
       const { paymentId, invoiceId } = req.body;
-      
+
       if (!paymentId || !invoiceId) {
         return res.status(400).json({ error: "شناسه پرداخت و فاکتور الزامی است" });
       }
 
       const updatedPayment = await storage.allocatePaymentToInvoice(paymentId, invoiceId);
-      
+
       // CRITICAL: Recalculate invoice status based on actual payment allocations
       const calculatedStatus = await storage.calculateInvoicePaymentStatus(invoiceId);
       await storage.updateInvoice(invoiceId, { status: calculatedStatus });
       console.log(`📊 Manual allocation: Invoice ${invoiceId} status updated to: ${calculatedStatus}`);
-      
+
       await storage.createActivityLog({
         type: "manual_payment_allocation",
         description: `پرداخت ${paymentId} به فاکتور ${invoiceId} تخصیص یافت - وضعیت: ${calculatedStatus}`,
@@ -1605,9 +1608,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('🔧 SHERLOCK v11.5: Starting batch invoice status recalculation...');
       const { representativeId, invoiceIds } = req.body;
-      
+
       let invoicesToProcess = [];
-      
+
       if (representativeId) {
         // Recalculate for specific representative
         const repInvoices = await storage.getInvoicesByRepresentative(representativeId);
@@ -1623,7 +1626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoicesToProcess = allInvoices.map(inv => inv.id);
         console.log(`📊 Processing ALL ${invoicesToProcess.length} invoices`);
       }
-      
+
       const results = {
         processed: 0,
         updated: 0,
@@ -1634,15 +1637,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           newStatus: string;
         }>
       };
-      
+
       // Process each invoice
       for (const invoiceId of invoicesToProcess) {
         try {
           const oldInvoice = await storage.getInvoice(invoiceId);
           if (!oldInvoice) continue;
-          
+
           const calculatedStatus = await storage.calculateInvoicePaymentStatus(invoiceId);
-          
+
           if (calculatedStatus !== oldInvoice.status) {
             await storage.updateInvoice(invoiceId, { status: calculatedStatus });
             results.statusChanges.push({
@@ -1653,21 +1656,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             results.updated++;
           }
-          
+
           results.processed++;
         } catch (invoiceError) {
           console.warn(`Error processing invoice ${invoiceId}:`, invoiceError);
         }
       }
-      
+
       console.log(`✅ Batch recalculation complete: ${results.updated} invoices updated out of ${results.processed} processed`);
-      
+
       // Log the batch operation
       await storage.createActivityLog({
         type: "batch_invoice_status_recalculation",
         description: `بازمحاسبه وضعیت ${results.processed} فاکتور - ${results.updated} فاکتور به‌روزرسانی شد`
       });
-      
+
       res.json({
         success: true,
         message: `وضعیت ${results.updated} فاکتور از ${results.processed} فاکتور بازمحاسبه و به‌روزرسانی شد`,
@@ -1684,7 +1687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const representativeId = parseInt(req.params.representativeId);
       const summary = await storage.getPaymentAllocationSummary(representativeId);
-      
+
       res.json(summary);
     } catch (error) {
       console.error('Error getting payment allocation summary:', error);
@@ -1706,7 +1709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const paymentId = parseInt(req.params.id);
       const { invoiceId } = req.body;
-      
+
       await storage.allocatePaymentToInvoice(paymentId, invoiceId);
       res.json({ success: true });
     } catch (error) {
@@ -1729,7 +1732,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const batchId = parseInt(req.params.id);
       const batch = await storage.getInvoiceBatch(batchId);
-      
+
       if (!batch) {
         return res.status(404).json({ error: "دسته فاکتور یافت نشد" });
       }
@@ -1754,7 +1757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/invoice-batches", requireAuth, async (req, res) => {
     try {
       const validatedData = insertInvoiceBatchSchema.parse(req.body);
-      
+
       // Generate unique batch code if not provided
       if (!validatedData.batchCode) {
         validatedData.batchCode = await storage.generateBatchCode(validatedData.periodStart);
@@ -1776,7 +1779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const batchId = parseInt(req.params.id);
       const updateData = req.body;
-      
+
       const batch = await storage.updateInvoiceBatch(batchId, updateData);
       res.json(batch);
     } catch (error) {
@@ -1789,7 +1792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const batchId = parseInt(req.params.id);
       await storage.completeBatch(batchId);
-      
+
       const updatedBatch = await storage.getInvoiceBatch(batchId);
       res.json({ 
         success: true, 
@@ -1841,7 +1844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ai/analyze-financial", requireAuth, async (req, res) => {
     try {
       const dashboardData = await storage.getDashboardData();
-      
+
       // Use XAI Grok for financial analysis
       const analysis = await xaiGrokEngine.analyzeFinancialData(
         parseFloat(dashboardData.totalRevenue),
@@ -1859,7 +1862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { representativeCode } = req.body;
       const representative = await storage.getRepresentativeByCode(representativeCode);
-      
+
       if (!representative) {
         return res.status(404).json({ error: "نماینده یافت نشد" });
       }
@@ -1886,13 +1889,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dashboardData = await storage.getDashboardData();
       const representatives = await storage.getRepresentatives();
       const invoices = await storage.getInvoices();
-      
+
       const reportData = {
         dashboard: dashboardData,
         representatives: representatives.slice(0, 10), // Top 10
         invoices: invoices.slice(0, 20) // Recent 20
       };
-      
+
       // const report = await generateFinancialReport(reportData); // Temporarily disabled
       const report = { message: "گزارش مالی - در حال توسعه", data: reportData };
       res.json({ report });
@@ -1905,22 +1908,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/test-telegram", requireAuth, async (req, res) => {
     try {
       console.log('Testing Telegram connection...');
-      
+
       // Get Telegram settings from environment variables or database
       let botToken = process.env.TELEGRAM_BOT_TOKEN;
       let chatId = process.env.TELEGRAM_CHAT_ID;
-      
+
       console.log('Env Bot Token exists:', !!botToken);
       console.log('Env Chat ID exists:', !!chatId);
-      
+
       // Fallback to database settings if env vars not available
       if (!botToken || !chatId) {
         const botTokenSetting = await storage.getSetting('telegram_bot_token');
         const chatIdSetting = await storage.getSetting('telegram_chat_id');
-        
+
         console.log('DB Bot Token exists:', !!botTokenSetting?.value);
         console.log('DB Chat ID exists:', !!chatIdSetting?.value);
-        
+
         if (!botTokenSetting?.value || !chatIdSetting?.value) {
           return res.status(400).json({ 
             error: "تنظیمات تلگرام کامل نیست - ابتدا توکن ربات و شناسه چت را ذخیره کنید",
@@ -1930,17 +1933,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             hasDbChatId: !!chatIdSetting?.value
           });
         }
-        
+
         botToken = botTokenSetting.value;
         chatId = chatIdSetting.value;
       }
-      
+
       console.log('Using Bot Token:', botToken ? `${botToken.substring(0, 10)}...` : 'none');
       console.log('Using Chat ID:', chatId);
-      
+
       // Test message
       const testMessage = `🤖 تست اتصال سیستم مدیریت مالی MarFaNet
-      
+
 ✅ اتصال با موفقیت برقرار شد
 📅 تاریخ تست: ${new Date().toLocaleString('fa-IR')}
 🔧 نسخه سیستم: 1.0.0
@@ -1949,7 +1952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send test message using the same method as invoice sending
       const telegramApiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-      
+
       const response = await fetch(telegramApiUrl, {
         method: 'POST',
         headers: {
@@ -1961,15 +1964,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           parse_mode: 'HTML'
         })
       });
-      
+
       console.log('Telegram API response status:', response.status);
       const result = await response.json();
       console.log('Telegram API response:', result);
-      
+
       if (!response.ok) {
         throw new Error(result.description || `Telegram API error: ${response.status}`);
       }
-      
+
       res.json({ 
         success: true, 
         message: "پیام تست با موفقیت ارسال شد",
@@ -2038,7 +2041,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/invoices/:id/edit-history", requireAuth, async (req, res) => {
     try {
       const invoiceId = parseInt(req.params.id);
-      
+
       if (!invoiceId) {
         return res.status(400).json({ error: "شناسه فاکتور نامعتبر است" });
       }
@@ -2058,14 +2061,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/invoices/:id/usage-details", requireAuth, async (req, res) => {
     try {
       const invoiceId = parseInt(req.params.id);
-      
+
       if (!invoiceId) {
         return res.status(400).json({ error: "شناسه فاکتور نامعتبر است" });
       }
 
       const invoices = await storage.getInvoices();
       const invoice = invoices.find(inv => inv.id === invoiceId);
-      
+
       if (!invoice) {
         return res.status(404).json({ error: "فاکتور یافت نشد" });
       }
@@ -2137,7 +2140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Set default Telegram template
       await storage.updateSetting('telegram_template', getDefaultTelegramTemplate());
-      
+
       // Initialize basic integrity constraints for active representatives
       const representatives = await storage.getRepresentatives();
       for (const rep of representatives.slice(0, 5)) { // Initialize first 5 representatives
@@ -2156,7 +2159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`Constraint for representative ${rep.id} already exists or failed to create`);
         }
       }
-      
+
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "خطا در راه‌اندازی اولیه" });
@@ -2167,7 +2170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
       const { representativeId, status } = req.query;
-      
+
       let transactions;
       if (representativeId) {
         transactions = await storage.getTransactionsByRepresentative(parseInt(representativeId as string));
@@ -2177,7 +2180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get all transactions (could be paginated in future)
         transactions = await storage.getPendingTransactions(); // For now, show pending ones
       }
-      
+
       res.json(transactions);
     } catch (error: any) {
       console.error('خطا در دریافت تراکنش‌ها:', error);
@@ -2189,11 +2192,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { transactionId } = req.params;
       const transaction = await storage.getFinancialTransaction(transactionId);
-      
+
       if (!transaction) {
         return res.status(404).json({ error: "تراکنش یافت نشد" });
       }
-      
+
       res.json(transaction);
     } catch (error: any) {
       console.error('خطا در دریافت تراکنش:', error);
@@ -2205,7 +2208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { transactionId } = req.params;
       await storage.rollbackTransaction(transactionId);
-      
+
       res.json({ 
         success: true, 
         message: `تراکنش ${transactionId} با موفقیت برگردانده شد` 
@@ -2230,11 +2233,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/constraints/validate", requireAuth, async (req, res) => {
     try {
       const { entityType, entityId } = req.body;
-      
+
       if (!entityType || !entityId) {
         return res.status(400).json({ error: "نوع موجودیت و شناسه ضروری است" });
       }
-      
+
       const validation = await storage.validateConstraints(entityType, parseInt(entityId));
       res.json(validation);
     } catch (error: any) {
@@ -2247,7 +2250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const constraintId = parseInt(req.params.constraintId);
       const fixed = await storage.fixConstraintViolation(constraintId);
-      
+
       res.json({ 
         success: fixed, 
         message: fixed ? "محدودیت با موفقیت رفع شد" : "امکان رفع خودکار محدودیت وجود ندارد" 
@@ -2262,7 +2265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/financial/reconcile", requireAuth, async (req, res) => {
     try {
       const { representativeId } = req.body;
-      
+
       if (representativeId) {
         // Reconcile specific representative
         await storage.updateRepresentativeFinancials(parseInt(representativeId));
@@ -2274,7 +2277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Reconcile all representatives (could be heavy operation)
         const representatives = await storage.getRepresentatives();
         let processed = 0;
-        
+
         for (const rep of representatives) {
           try {
             await storage.updateRepresentativeFinancials(rep.id);
@@ -2283,7 +2286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error(`Error reconciling representative ${rep.id}:`, error);
           }
         }
-        
+
         res.json({ 
           success: true, 
           message: `${processed} نماینده هماهنگ شد`,
@@ -2291,7 +2294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           total: representatives.length
         });
       }
-      
+
     } catch (error: any) {
       console.error('خطا در هماهنگی مالی:', error);
       res.status(500).json({ error: 'خطا در هماهنگی مالی', details: error.message });
@@ -2300,7 +2303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // CRM Routes Integration
   // CRM routes are already registered via registerCrmRoutes() function
-  
+
   // AI Engine routes are integrated above in xAI Grok configuration section
 
   // Initialize CRM real-time sync
@@ -2322,7 +2325,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // 🚀 SHERLOCK v18.4: Register STANDARDIZED Invoice Routes - eliminates 11,117,500 تومان discrepancy
   registerStandardizedInvoiceRoutes(app, requireAuth, storage);
-  
+
+  // ====== FINANCIAL INTEGRITY API ======
+  // Get financial snapshot for representative
+  app.get("/api/financial-integrity/representative/:id/snapshot", requireAuth, async (req, res) => {
+    try {
+      const representativeId = parseInt(req.params.id);
+
+      if (!representativeId || isNaN(representativeId)) {
+        return res.status(400).json({ 
+          error: 'شناسه نماینده معتبر نیست' 
+        });
+      }
+
+      // Get representative basic info
+      const representative = await db.select()
+        .from(representatives)
+        .where(eq(representatives.id, representativeId))
+        .limit(1);
+
+      if (!representative.length) {
+        return res.status(404).json({ 
+          error: 'نماینده یافت نشد' 
+        });
+      }
+
+      const rep = representative[0];
+
+      // Calculate financial snapshot using unified financial engine
+      const financialData = await unifiedFinancialEngine.calculateRepresentative(representativeId);
+
+      // Get detailed invoice and payment info
+      const invoicesData = await db.select({
+        count: sql<number>`COUNT(*)`,
+        totalAmount: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`,
+        unpaidAmount: sql<number>`COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue', 'partial') THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
+        paidAmount: sql<number>`COALESCE(SUM(CASE WHEN status = 'paid' THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`
+      }).from(invoices).where(eq(invoices.representativeId, representativeId));
+
+      const paymentsData = await db.select({
+        count: sql<number>`COUNT(*)`,
+        totalAmount: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`,
+        allocatedAmount: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = true THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`,
+        unallocatedAmount: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = false THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`
+      }).from(payments).where(eq(payments.representativeId, representativeId));
+
+      const invoice = invoicesData[0];
+      const payment = paymentsData[0];
+
+      // Calculate integrity metrics
+      const hasExcessPayments = payment.totalAmount > invoice.totalAmount;
+      const needsReconciliation = Math.abs(financialData.actualDebt - parseFloat(rep.totalDebt)) > 1000;
+      const integrityScore = needsReconciliation ? 75 : hasExcessPayments ? 85 : 100;
+
+      const snapshot = {
+        representativeId,
+        representativeName: rep.name,
+
+        // فاکتورها
+        totalInvoices: invoice.count,
+        totalInvoiceAmount: invoice.totalAmount,
+        unpaidInvoiceAmount: invoice.unpaidAmount,
+        paidInvoiceAmount: invoice.paidAmount,
+
+        // پرداخت‌ها
+        totalPayments: payment.count,
+        totalPaymentAmount: payment.totalAmount,
+        allocatedPaymentAmount: payment.allocatedAmount,
+        unallocatedPaymentAmount: payment.unallocatedAmount,
+
+        // محاسبات نهایی (استاندارد)
+        standardDebt: financialData.actualDebt,
+        standardCredit: Math.max(0, payment.totalAmount - invoice.totalAmount),
+        standardTotalSales: financialData.totalSales,
+
+        // وضعیت سلامت مالی
+        hasExcessPayments,
+        needsReconciliation,
+        integrityScore
+      };
+
+      res.json({
+        success: true,
+        data: snapshot,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('Error getting financial integrity snapshot:', error);
+      res.status(500).json({ 
+        error: 'خطا در دریافت اطلاعات مالی' 
+      });
+    }
+  });
+
+
   const httpServer = createServer(app);
   return httpServer;
 }
