@@ -121,3 +121,8 @@ router.get('/all-representatives', async (req, res) => {
 });
 
 export default router;
+
+// Named export function for integration
+export function registerUnifiedFinancialRoutes(app: any, requireAuth: any) {
+  app.use('/api/unified-financial', router);
+}

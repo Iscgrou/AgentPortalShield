@@ -191,3 +191,5 @@ export function registerUnifiedStatisticsRoutes(app: any, requireAuth: any) {
   // Legacy compatibility routes  
   app.use("/api/dashboard", router);
 }
+
+export default router;
