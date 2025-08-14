@@ -1958,6 +1958,13 @@ function EditInvoiceDialog({
     const newData = { ...parsedUsageData, [field]: value };
     setParsedUsageData(newData);
     setUsageData(JSON.stringify(newData, null, 2));
+    
+    // ✅ SHERLOCK v24.1: Touch session during long edit operations
+    if (Math.random() < 0.1) { // 10% chance to refresh session
+      apiRequest('/api/crm/auth/user', { method: 'GET' }).catch(() => {
+        console.warn('Session may have expired during editing');
+      });
+    }
   };
 
   const updateUsageItem = (index: number, field: string, value: string | number) => {
@@ -2068,6 +2075,19 @@ function EditInvoiceDialog({
   const handleSave = async () => {
     try {
       setIsLoadingEditInvoice(true);
+
+      // ✅ SHERLOCK v24.1: Session refresh before long operations
+      try {
+        await apiRequest('/api/crm/auth/user', { method: 'GET' });
+      } catch (authError) {
+        toast({
+          title: "انقضای جلسه",
+          description: "لطفاً مجدداً وارد شوید",
+          variant: "destructive"
+        });
+        window.location.reload();
+        return;
+      }
 
       if (!amount || !issueDate) {
         toast({
@@ -2479,6 +2499,29 @@ function CreatePaymentDialog({
       setPaymentDate(getCurrentPersianDate());
     }
   }, [open, paymentDate]);
+
+  // ✅ SHERLOCK v24.1: Auto session refresh for EditInvoiceDialog
+  React.useEffect(() => {
+    if (!open) return;
+    
+    const interval = setInterval(() => {
+      // Touch session every 10 minutes during edit
+      apiRequest('/api/crm/auth/user?touch=true', { method: 'GET' })
+        .catch(error => {
+          console.warn('Session refresh failed during edit:', error);
+          if (error.status === 401) {
+            toast({
+              title: "انقضای جلسه",
+              description: "جلسه شما منقضی شده است. لطفاً مجدداً وارد شوید",
+              variant: "destructive"
+            });
+            setTimeout(() => window.location.reload(), 2000);
+          }
+        });
+    }, 10 * 60 * 1000); // Every 10 minutes
+
+    return () => clearInterval(interval);
+  }, [open, toast]);
 
   const handleSave = async () => {
     try {
