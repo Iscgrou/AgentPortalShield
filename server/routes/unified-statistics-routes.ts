@@ -23,8 +23,14 @@ function requireAuth(req: any, res: any, next: any) {
  */
 router.get("/global", requireAuth, async (req, res) => {
   try {
+    // Cache response for 30 seconds to prevent repeated expensive queries
+    res.set('Cache-Control', 'public, max-age=30');
+
+    console.log('🔄 SHERLOCK v18.0: Starting global statistics generation...');
+    const startTime = Date.now();
+
     const stats = await unifiedStatisticsEngine.getGlobalStatistics();
-    
+
     res.json({
       success: true,
       data: stats,
@@ -50,7 +56,7 @@ router.get("/global", requireAuth, async (req, res) => {
 router.get("/representatives", requireAuth, async (req, res) => {
   try {
     const stats = await unifiedStatisticsEngine.getRepresentativeStatistics();
-    
+
     res.json({
       success: true,
       data: stats,
@@ -77,7 +83,7 @@ router.get("/recent-activities", requireAuth, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
     const activities = await unifiedStatisticsEngine.getRecentActivities(limit);
-    
+
     res.json({
       success: true,
       data: activities,
@@ -104,9 +110,9 @@ router.get("/recent-activities", requireAuth, async (req, res) => {
 router.post("/cache/invalidate", requireAuth, async (req, res) => {
   try {
     const { scope = 'all' } = req.body;
-    
+
     unifiedStatisticsEngine.invalidateCache(scope);
-    
+
     res.json({
       success: true,
       message: `Cache ${scope} با موفقیت پاک‌سازی شد`,
@@ -129,12 +135,12 @@ router.post("/cache/invalidate", requireAuth, async (req, res) => {
 router.get("/health", async (req, res) => {
   try {
     const startTime = Date.now();
-    
+
     // تست سریع کارکرد Engine
     await unifiedStatisticsEngine.getRecentActivities(1);
-    
+
     const responseTime = Date.now() - startTime;
-    
+
     res.json({
       success: true,
       status: "HEALTHY",

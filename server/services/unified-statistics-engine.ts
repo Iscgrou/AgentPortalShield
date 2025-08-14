@@ -24,29 +24,29 @@ export interface GlobalStatistics {
   totalDebt: number;
   totalCredit: number;
   totalOutstanding: number;
-  
+
   // Representatives
   totalRepresentatives: number;
   activeRepresentatives: number;
   inactiveRepresentatives: number;
   riskRepresentatives: number;
-  
+
   // Invoices & Payments
   totalInvoices: number;
   paidInvoices: number;
   unpaidInvoices: number;
   overdueInvoices: number;
   unsentTelegramInvoices: number;
-  
+
   // Sales Partners
   totalSalesPartners: number;
   activeSalesPartners: number;
-  
+
   // System Health
   systemIntegrityScore: number;
   lastReconciliationDate: string;
   problematicRepresentativesCount: number;
-  
+
   // Performance Metrics
   responseTime: number;
   cacheStatus: 'FRESH' | 'CACHE' | 'STALE';
@@ -92,7 +92,7 @@ export class UnifiedStatisticsEngine {
   async getGlobalStatistics(): Promise<GlobalStatistics> {
     const startTime = Date.now();
     const cacheKey = 'global-statistics';
-    
+
     // Check cache
     const cached = this.cache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < this.cacheExpiry) {
@@ -129,29 +129,29 @@ export class UnifiedStatisticsEngine {
       totalDebt: financialOverview.totalDebt,
       totalCredit: financialOverview.totalCredit,
       totalOutstanding: financialOverview.totalOutstanding,
-      
+
       // Representatives  
       totalRepresentatives: representativeStats.totalCount,
       activeRepresentatives: representativeStats.activeCount,
       inactiveRepresentatives: representativeStats.inactiveCount,
       riskRepresentatives: representativeStats.riskCount,
-      
+
       // Invoices & Payments
       totalInvoices: invoiceStats.totalCount,
       paidInvoices: invoiceStats.paidCount,
       unpaidInvoices: invoiceStats.unpaidCount,
       overdueInvoices: invoiceStats.overdueCount,
       unsentTelegramInvoices: invoiceStats.unsentTelegramCount,
-      
+
       // Sales Partners
       totalSalesPartners: salesPartnerStats.totalCount,
       activeSalesPartners: salesPartnerStats.activeCount,
-      
+
       // System Health
       systemIntegrityScore: systemHealth.averageIntegrityScore,
       lastReconciliationDate: systemHealth.lastReconciliationDate,
       problematicRepresentativesCount: systemHealth.problematicCount,
-      
+
       // Performance
       responseTime: Date.now() - startTime,
       cacheStatus: 'FRESH',
@@ -160,7 +160,7 @@ export class UnifiedStatisticsEngine {
 
     // Cache results
     this.cache.set(cacheKey, { data: globalStats, timestamp: Date.now() });
-    
+
     console.log(`✅ SHERLOCK v18.0: Global statistics generated in ${globalStats.responseTime}ms`);
     return globalStats;
   }
@@ -171,7 +171,7 @@ export class UnifiedStatisticsEngine {
   async getRepresentativeStatistics(): Promise<RepresentativeStatistics> {
     const startTime = Date.now();
     const cacheKey = 'representative-statistics';
-    
+
     const cached = this.cache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < this.cacheExpiry) {
       return { ...cached.data, lastSyncTime: new Date().toISOString() };
@@ -197,7 +197,7 @@ export class UnifiedStatisticsEngine {
     };
 
     this.cache.set(cacheKey, { data: repStats, timestamp: Date.now() });
-    
+
     console.log(`✅ Representative statistics generated in ${Date.now() - startTime}ms`);
     return repStats;
   }
@@ -252,7 +252,7 @@ export class UnifiedStatisticsEngine {
       db.select({ 
         total: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
       }).from(payments).where(eq(payments.isAllocated, true)),
-      
+
       // Total Debt (Unpaid + Overdue invoices minus allocated payments per representative)
       db.select({
         totalDebt: sql<number>`
@@ -278,7 +278,7 @@ export class UnifiedStatisticsEngine {
         WHERE is_allocated = true
         GROUP BY representative_id
       ) pay_total`, sql`inv_total.id = pay_total.representative_id`),
-      
+
       // Total Credit (Unallocated payments)
       db.select({ 
         total: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)` 
@@ -304,7 +304,7 @@ export class UnifiedStatisticsEngine {
         activeCount: sql<number>`SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END)`,
         inactiveCount: sql<number>`SUM(CASE WHEN is_active = false THEN 1 ELSE 0 END)`
       }).from(representatives),
-      
+
       db.select({
         totalSales: sql<number>`COALESCE(SUM(CAST(total_sales as DECIMAL)), 0)`,
         totalDebt: sql<number>`COALESCE(SUM(CAST(total_debt as DECIMAL)), 0)`,
@@ -365,10 +365,10 @@ export class UnifiedStatisticsEngine {
         reconciliationNeeded: [],
         lowIntegrityReps: problematicReps
       };
-      
+
       // محاسبه میانگین امتیاز سلامت سیستم
       const representativeIds = await db.select({ id: representatives.id }).from(representatives).where(eq(representatives.isActive, true));
-      
+
       let totalIntegrityScore = 0;
       let validScores = 0;
 
@@ -380,7 +380,7 @@ export class UnifiedStatisticsEngine {
           if (data.debtLevel === 'CRITICAL') integrityScore = 50;
           else if (data.debtLevel === 'HIGH') integrityScore = 70;
           else if (data.debtLevel === 'MODERATE') integrityScore = 85;
-          
+
           totalIntegrityScore += integrityScore;
           validScores++;
         } catch (error) {
@@ -428,7 +428,7 @@ export class UnifiedStatisticsEngine {
           if (data.debtLevel === 'CRITICAL') integrityScore = 50;
           else if (data.debtLevel === 'HIGH') integrityScore = 70;
           else if (data.debtLevel === 'MODERATE') integrityScore = 85;
-          
+
           return {
             id: rep.id,
             name: rep.name,
