@@ -171,10 +171,13 @@ export default function Representatives() {
     queryKey: ["/api/representatives"],
     queryFn: () => apiRequest("/api/representatives"),
     select: (data: any) => {
+      console.log('SHERLOCK v12.1 DEBUG: Representatives data:', data);
       if (Array.isArray(data)) return data;
       if (data && Array.isArray(data.data)) return data.data;
       return [];
-    }
+    },
+    retry: 3,
+    retryDelay: 1000
   });
 
 

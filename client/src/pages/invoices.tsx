@@ -90,6 +90,16 @@ export default function Invoices() {
       search: searchTerm || undefined,
       telegram: telegramFilter !== 'all' ? telegramFilter : undefined
     }],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.append('page', currentPage.toString());
+      params.append('limit', pageSize.toString());
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (searchTerm) params.append('search', searchTerm);
+      if (telegramFilter !== 'all') params.append('telegram', telegramFilter);
+      
+      return apiRequest(`/api/invoices/with-batch-info?${params.toString()}`);
+    },
     select: (data: any) => {
       console.log('SHERLOCK v12.1 DEBUG: Raw data from API:', data);
       // Handle both array response and paginated response
@@ -97,7 +107,9 @@ export default function Invoices() {
         return { data: data, pagination: null };
       }
       return data;
-    }
+    },
+    retry: 3,
+    retryDelay: 1000
   });
 
   const invoices = invoicesResponse?.data || [];

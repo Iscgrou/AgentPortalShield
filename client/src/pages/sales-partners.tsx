@@ -92,10 +92,13 @@ export default function SalesPartners() {
     queryKey: ["/api/sales-partners"],
     queryFn: () => apiRequest("/api/sales-partners"),
     select: (data: any) => {
+      console.log('SHERLOCK v12.1 DEBUG: Sales Partners data:', data);
       if (Array.isArray(data)) return data;
       if (data && Array.isArray(data.data)) return data.data;
       return [];
-    }
+    },
+    retry: 3,
+    retryDelay: 1000
   });
 
   const { data: stats } = useQuery<SalesPartnerStats>({

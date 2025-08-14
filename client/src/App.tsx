@@ -108,13 +108,49 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 }
 
 function AuthenticatedRouter() {
-  const { isAuthenticated, isLoading } = useAuth();
+  // Check authentication status
+  const { data: authStatus, isLoading: authLoading, error: authError } = useQuery({
+    queryKey: ['auth-status'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/auth/check', { credentials: 'include' });
+        console.log('Auth check response status:', response.status);
+
+        if (!response.ok) {
+          console.error('Auth check failed:', response.status);
+          return { authenticated: false };
+        }
+
+        const data = await response.json();
+        console.log('Auth status:', data);
+        return data;
+      } catch (error) {
+        console.error('Auth check error:', error);
+        return { authenticated: false };
+      }
+    },
+    retry: 1,
+    retryDelay: 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const isAuthenticated = authStatus?.authenticated === true;
+
+  // Log authentication status for debugging
+  console.log('Authentication Status:', {
+    isAuthenticated,
+    authLoading,
+    authError,
+    authStatus
+  });
+
+  const { isAuthenticated: adminAuthenticated, isLoading: adminIsLoading } = useAuth();
   const [location] = useLocation();
-  
+
   // Check if this is a public portal route
   const isPublicPortal = location.startsWith('/portal/') || location.startsWith('/representative/');
   const isCrmRoute = location.startsWith('/crm');
-  
+
   if (isPublicPortal) {
     // 🔒 SECURITY: Completely isolated public portal - no admin access
     return (
@@ -161,9 +197,9 @@ function AuthenticatedRouter() {
       </CrmAuthProvider>
     );
   }
-  
+
   // Show loading state while checking authentication
-  if (isLoading) {
+  if (authLoading || adminIsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -173,16 +209,16 @@ function AuthenticatedRouter() {
       </div>
     );
   }
-  
+
   // SHERLOCK v3.0 FIX: Always show unified auth for non-authenticated users
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !adminAuthenticated) {
     return (
       <CrmAuthProvider>
         <UnifiedAuth />
       </CrmAuthProvider>
     );
   }
-  
+
   // Show admin panel if authenticated
   return (
     <AdminLayout>
