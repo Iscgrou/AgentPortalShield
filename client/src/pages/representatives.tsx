@@ -70,17 +70,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-// SHERLOCK v23.0: Enhanced error handling and routing fix
-import React from 'react'; // This import is now correct
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
-
-// Component start with error boundary
+// Component start with error boundary  
 export default function Representatives() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
