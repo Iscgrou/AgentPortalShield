@@ -96,8 +96,8 @@ export class UnifiedStatisticsEngine {
     const cacheKey = 'global-statistics';
 
     // Check cache
-    const cached = this.cache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < this.CACHE_DURATION) {
+    const cached = UnifiedStatisticsEngine.cache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < UnifiedStatisticsEngine.CACHE_DURATION) {
       return { 
         ...cached.data, 
         responseTime: Date.now() - startTime,
@@ -161,7 +161,7 @@ export class UnifiedStatisticsEngine {
     };
 
     // Cache results
-    this.cache.set(cacheKey, { data: globalStats, timestamp: Date.now() });
+    UnifiedStatisticsEngine.cache.set(cacheKey, { data: globalStats, timestamp: Date.now() });
 
     console.log(`✅ SHERLOCK v18.0: Global statistics generated in ${globalStats.responseTime}ms`);
     return globalStats;
@@ -174,8 +174,8 @@ export class UnifiedStatisticsEngine {
     const startTime = Date.now();
     const cacheKey = 'representative-statistics';
 
-    const cached = this.cache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < this.REPRESENTATIVE_CACHE_DURATION) {
+    const cached = UnifiedStatisticsEngine.cache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < UnifiedStatisticsEngine.REPRESENTATIVE_CACHE_DURATION) {
       return { ...cached.data, lastSyncTime: new Date().toISOString() };
     }
 
@@ -198,7 +198,7 @@ export class UnifiedStatisticsEngine {
       lastSyncTime: new Date().toISOString()
     };
 
-    this.cache.set(cacheKey, { data: repStats, timestamp: Date.now() });
+    UnifiedStatisticsEngine.cache.set(cacheKey, { data: repStats, timestamp: Date.now() });
 
     console.log(`✅ Representative statistics generated in ${Date.now() - startTime}ms`);
     return repStats;
@@ -237,11 +237,11 @@ export class UnifiedStatisticsEngine {
    */
   invalidateCache(scope: 'all' | 'global' | 'representatives' | 'financial' = 'all') {
     if (scope === 'all') {
-      this.cache.clear();
+      UnifiedStatisticsEngine.cache.clear();
       console.log("🧹 SHERLOCK v18.0: All statistics cache cleared");
     } else {
-      const keys = Array.from(this.cache.keys()).filter(key => key.includes(scope));
-      keys.forEach(key => this.cache.delete(key));
+      const keys = Array.from(UnifiedStatisticsEngine.cache.keys()).filter(key => key.includes(scope));
+      keys.forEach(key => UnifiedStatisticsEngine.cache.delete(key));
       console.log(`🧹 SHERLOCK v18.0: ${scope} statistics cache cleared`);
     }
   }
