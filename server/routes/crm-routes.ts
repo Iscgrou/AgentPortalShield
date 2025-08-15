@@ -423,7 +423,7 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
       // Set session security options with extended timeout for edit operations
       req.session.cookie.secure = process.env.NODE_ENV === 'production';
       req.session.cookie.httpOnly = true;
-      req.session.cookie.maxAge = 48 * 60 * 60 * 1000; // 48 hours for long edit operations
+      req.session.cookie.maxAge = 48 * 60 * 60 * 1000; // 48 hours total, refreshed every 2 hours during editing
 
       // Force session save with enhanced error handling
       req.session.save((err) => {
@@ -488,10 +488,10 @@ export function registerCrmRoutes(app: Express, storage: IStorage) {
       if (req.session.crmUser) {
         req.session.crmUser.lastActivity = new Date().toISOString();
         
-        // ✅ SHERLOCK v24.1: Extended session for long edit operations
+        // ✅ SHERLOCK v24.2: Extended session for long edit operations - 48 hours with 2 hour touch intervals
         if (req.query.touch === 'true') {
-          req.session.cookie.maxAge = 48 * 60 * 60 * 1000; // 48 hours
-          console.log('🔄 Session extended for long edit operation');
+          req.session.cookie.maxAge = 48 * 60 * 60 * 1000; // 48 hours total
+          console.log('🔄 Session extended for long edit operation (2-hour refresh cycles)');
         }
         
         req.session.touch(); // Extend session expiry

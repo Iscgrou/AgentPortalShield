@@ -1959,8 +1959,8 @@ function EditInvoiceDialog({
     setParsedUsageData(newData);
     setUsageData(JSON.stringify(newData, null, 2));
     
-    // ✅ SHERLOCK v24.1: Touch session during long edit operations
-    if (Math.random() < 0.1) { // 10% chance to refresh session
+    // ✅ SHERLOCK v24.2: Touch session during long edit operations - 2 hour intervals
+    if (Math.random() < 0.05) { // 5% chance to refresh session (reduced frequency due to longer intervals)
       apiRequest('/api/crm/auth/user', { method: 'GET' }).catch(() => {
         console.warn('Session may have expired during editing');
       });
@@ -2500,12 +2500,12 @@ function CreatePaymentDialog({
     }
   }, [open, paymentDate]);
 
-  // ✅ SHERLOCK v24.1: Auto session refresh for EditInvoiceDialog
+  // ✅ SHERLOCK v24.2: Extended auto session refresh for EditInvoiceDialog - 2 hours
   React.useEffect(() => {
     if (!open) return;
     
     const interval = setInterval(() => {
-      // Touch session every 10 minutes during edit
+      // Touch session every 2 hours during edit
       apiRequest('/api/crm/auth/user?touch=true', { method: 'GET' })
         .catch(error => {
           console.warn('Session refresh failed during edit:', error);
@@ -2518,7 +2518,7 @@ function CreatePaymentDialog({
             setTimeout(() => window.location.reload(), 2000);
           }
         });
-    }, 10 * 60 * 1000); // Every 10 minutes
+    }, 2 * 60 * 60 * 1000); // Every 2 hours
 
     return () => clearInterval(interval);
   }, [open, toast]);
