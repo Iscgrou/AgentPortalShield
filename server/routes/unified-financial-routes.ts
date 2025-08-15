@@ -409,6 +409,35 @@ router.get('/calculate-immediate-debt-sum', requireAuth, async (req, res) => {
 });
 
 /**
+ * آمار کلی خلاصه - alias برای /global
+ * GET /api/unified-financial/summary
+ */
+router.get('/summary', requireAuth, async (req, res) => {
+  try {
+    const summary = await unifiedFinancialEngine.calculateGlobalSummary();
+
+    res.json({
+      success: true,
+      data: {
+        totalSystemDebt: summary.totalSystemDebt.toString(),
+        totalRepresentatives: summary.totalRepresentatives
+      },
+      meta: {
+        source: "UNIFIED FINANCIAL ENGINE v18.2",
+        accuracy: "100% GUARANTEED",
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error getting unified summary:', error);
+    res.status(500).json({
+      success: false,
+      error: "خطا در محاسبه آمار کلی"
+    });
+  }
+});
+
+/**
  * تست authentication
  */
 router.get('/auth-test', requireAuth, async (req, res) => {
