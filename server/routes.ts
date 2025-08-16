@@ -50,11 +50,6 @@ import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-route
 // Import database optimization routes registration
 import databaseOptimizationRoutes from './routes/database-optimization-routes.js';
 
-// Import workspace routes registration
-import { registerWorkspaceRoutes } from "./routes/workspace-routes";
-// Import bulk update routes registration
-import { registerBulkUpdateRoutes } from "./routes/bulk-update-routes";
-
 
 // Configure multer for file uploads with broader JSON acceptance
 const upload = multer({
@@ -187,11 +182,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register database optimization routes
   app.use('/api/database-optimization', databaseOptimizationRoutes);
-
-  // Register workspace routes
-  registerWorkspaceRoutes(app);
-  // Register bulk update routes
-  registerBulkUpdateRoutes(app);
 
   // SHERLOCK v1.0: Session Recovery and Debug Endpoint
   app.get("/api/auth/session-debug", (req, res) => {
@@ -680,9 +670,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stats = await storage.getSalesPartnersStatistics();
       res.json(stats);
     } catch (error) {
-      res.status(500).json({
+      res.status(500).json({ 
         totalPartners: "0",
-        activePartners: "0",
+        activePartners: "0", 
         totalCommission: "0",
         averageCommissionRate: "0"
       });
@@ -1286,7 +1276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!botToken || !chatId) {
         console.error('❌ Missing Telegram credentials');
         return res.status(400).json({
-          error: "تنظیمات تلگرام کامل نیست. لطفاً Bot Token و شناسه چت را در تنظیمات وارد کنید."
+          error: "تنظیمات تلگرام کامل نیست. لطفاً Bot Token و Chat ID را در تنظیمات وارد کنید."
         });
       }
 
