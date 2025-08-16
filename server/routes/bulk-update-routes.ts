@@ -7,22 +7,32 @@ import { eq, or } from "drizzle-orm";
 
 export function registerBulkUpdateRoutes(app: Express) {
   
-  // Enhanced Authentication Middleware - اصلاح مسیر احراز هویت
+  // Enhanced Authentication Middleware - Fixed session detection
   const bulkUpdateAuthMiddleware = (req: any, res: any, next: any) => {
-    console.log('🔐 SHERLOCK v25.2 Enhanced Bulk Auth Check:', {
+    console.log('🔐 SHERLOCK v26.0 Enhanced Bulk Auth Check:', {
       sessionId: req.sessionID,
       hasSession: !!req.session,
       authenticated: req.session?.authenticated,
       user: req.session?.user,
       role: req.session?.user?.role,
+      adminUser: req.session?.adminUser,
+      isAdmin: req.session?.isAdmin,
       timestamp: new Date().toISOString()
     });
 
-    // Multiple authentication paths
+    // Multiple authentication paths with enhanced detection
     const paths = [
+      // Standard admin session
       req.session?.authenticated === true && req.session?.user?.role === 'SUPER_ADMIN',
-      req.session?.authenticated === true && req.session?.user?.role === 'ADMIN', 
-      req.session?.user?.username === 'mgr' && req.session?.user?.role === 'SUPER_ADMIN'
+      req.session?.authenticated === true && req.session?.user?.role === 'ADMIN',
+      // Legacy admin session patterns
+      req.session?.isAdmin === true,
+      req.session?.adminUser?.username === 'mgr',
+      req.session?.user?.username === 'mgr',
+      // Direct admin check for mgr user
+      req.session?.user?.username === 'mgr' && req.session?.user?.role === 'SUPER_ADMIN',
+      // Session with admin flag
+      req.session?.adminAuthenticated === true
     ];
 
     const isAuthorized = paths.some(Boolean);
